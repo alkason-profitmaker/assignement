@@ -82,11 +82,26 @@ class OrderRepositoryImpl implements OrderRepository {
   @override
   Future<Either<Failure, PrintOrder>> createOrder(CreateOrderRequest request) async {
     try {
+      // Validate user is authenticated
+      final userId = _supabaseService.currentUserId;
+      if (userId == null) {
+        return Left(AuthFailure(message: 'User not authenticated'));
+      }
+
       // Validate request
       if (request.totalPages <= 0) {
         return Left(ValidationFailure(
           message: 'Invalid page count',
           fieldErrors: {'pages': 'Must have at least 1 page'},
+        ));
+      }
+
+      // Get station to find society
+      final station = await _supabaseService.getStation(request.stationId);
+      if (station == null) {
+        return Left(ServerFailure(
+          message: 'Station not found',
+          code: 'STATION_NOT_FOUND',
         ));
       }
 
@@ -99,6 +114,8 @@ class OrderRepositoryImpl implements OrderRepository {
 
       // Create order in database
       final order = await _supabaseService.createOrder(
+        userId: userId,
+        societyId: station.societyId,
         stationId: request.stationId,
         fileName: request.fileName,
         fileHash: request.fileHash,
@@ -107,6 +124,7 @@ class OrderRepositoryImpl implements OrderRepository {
         colorPages: request.colorPages,
         copies: request.copies,
         amountPaise: amountPaise,
+        finalAmountPaise: amountPaise,
       );
 
       return Right(order);
