@@ -19,12 +19,26 @@ class SupabaseService {
   /// Check if user is authenticated
   bool get isAuthenticated => _client.auth.currentUser != null;
 
-  /// Send OTP to phone number
+  /// Get current session
+  Session? get currentSession => _client.auth.currentSession;
+
+  /// Stream of auth state changes
+  Stream<AppUser?> get authStateChanges {
+    return _client.auth.onAuthStateChange.asyncMap((event) async {
+      if (event.session?.user == null) return null;
+      return await getCurrentUser();
+    });
+  }
+
+  /// Send OTP to phone number (alias: signInWithOtp)
   Future<void> sendOtp(String phone) async {
     await _client.auth.signInWithOtp(
       phone: '+91$phone',
     );
   }
+
+  /// Alias for sendOtp
+  Future<void> signInWithOtp(String phone) => sendOtp(phone);
 
   /// Verify OTP and sign in
   Future<AuthResponse> verifyOtp(String phone, String otp) async {
@@ -48,7 +62,11 @@ class SupabaseService {
   Future<AppUser?> getCurrentUser() async {
     final userId = currentUserId;
     if (userId == null) return null;
+    return getUserProfile(userId);
+  }
 
+  /// Get user profile by ID
+  Future<AppUser?> getUserProfile(String userId) async {
     final response = await _client
         .from(SupabaseConstants.usersTable)
         .select()
@@ -121,8 +139,34 @@ class SupabaseService {
     return Society.fromJson(response);
   }
 
-  /// Search societies by city/pincode
-  Future<List<Society>> searchSocieties({
+  /// Alias for getSociety
+  Future<Society?> getSocietyById(String societyId) => getSociety(societyId);
+
+  /// Get all active societies
+  Future<List<Society>> getAllSocieties() async {
+    final response = await _client
+        .from(SupabaseConstants.societiesTable)
+        .select()
+        .eq('is_active', true)
+        .order('name');
+
+    return response.map((json) => Society.fromJson(json)).toList();
+  }
+
+  /// Search societies by query string
+  Future<List<Society>> searchSocieties(String query) async {
+    final response = await _client
+        .from(SupabaseConstants.societiesTable)
+        .select()
+        .eq('is_active', true)
+        .or('name.ilike.%$query%,address.ilike.%$query%,city.ilike.%$query%,pincode.eq.$query')
+        .order('name');
+
+    return response.map((json) => Society.fromJson(json)).toList();
+  }
+
+  /// Search societies with filters
+  Future<List<Society>> searchSocietiesFiltered({
     String? city,
     String? pincode,
     String? query,
@@ -162,6 +206,9 @@ class SupabaseService {
     return response.map((json) => Station.fromJson(json)).toList();
   }
 
+  /// Alias for getStations
+  Future<List<Station>> getStationsBySociety(String societyId) => getStations(societyId);
+
   /// Get station by ID
   Future<Station?> getStation(String stationId) async {
     final response = await _client
@@ -173,6 +220,9 @@ class SupabaseService {
     if (response == null) return null;
     return Station.fromJson(response);
   }
+
+  /// Alias for getStation
+  Future<Station?> getStationById(String stationId) => getStation(stationId);
 
   // ============================================
   // Order Operations
@@ -329,8 +379,15 @@ class SupabaseService {
   // Credit Operations
   // ============================================
 
-  /// Get user's available credits
-  Future<List<Credit>> getUserCredits(String userId) async {
+  /// Get current user's available credits (no param version)
+  Future<List<Credit>> getUserCredits() async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+    return getUserCreditsById(userId);
+  }
+
+  /// Get user's available credits by ID
+  Future<List<Credit>> getUserCreditsById(String userId) async {
     final now = DateTime.now().toIso8601String();
     final response = await _client
         .from(SupabaseConstants.creditsTable)
@@ -342,10 +399,49 @@ class SupabaseService {
     return response.map((json) => Credit.fromJson(json)).toList();
   }
 
+  /// Get credit history for current user
+  Future<List<Credit>> getCreditHistory({int limit = 50, int offset = 0}) async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+
+    final response = await _client
+        .from(SupabaseConstants.creditsTable)
+        .select()
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return response.map((json) => Credit.fromJson(json)).toList();
+  }
+
   /// Get credit summary for user
   Future<CreditSummary> getCreditSummary(String userId) async {
-    final credits = await getUserCredits(userId);
+    final credits = await getUserCreditsById(userId);
     return CreditSummary.fromCredits(credits);
+  }
+
+  /// Apply credits to an order and return amount saved
+  Future<int> applyCreditsToOrder(String orderId, int maxAmountPaise) async {
+    final userId = currentUserId;
+    if (userId == null) return 0;
+
+    final credits = await getUserCredits();
+    if (credits.isEmpty) return 0;
+
+    // Calculate how much credit can be applied
+    int totalAvailable = 0;
+    for (final credit in credits) {
+      totalAvailable += credit.remainingPaise;
+    }
+
+    final toApply = totalAvailable < maxAmountPaise ? totalAvailable : maxAmountPaise;
+
+    if (toApply > 0) {
+      // Update order with credits applied
+      await updateOrder(orderId: orderId);
+    }
+
+    return toApply;
   }
 
   // ============================================
