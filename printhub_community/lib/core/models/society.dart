@@ -1,34 +1,19 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'society.g.dart';
-
 /// Model representing a registered residential society
-@JsonSerializable()
 class Society {
   final String id;
   final String name;
   final String address;
   final String city;
   final String pincode;
-  @JsonKey(name: 'total_flats')
   final int? totalFlats;
-  @JsonKey(name: 'paytm_mid')
   final String paytmMid;
-  @JsonKey(name: 'contact_name')
   final String? contactName;
-  @JsonKey(name: 'contact_phone')
   final String? contactPhone;
-  @JsonKey(name: 'contact_email')
   final String? contactEmail;
-  @JsonKey(name: 'commission_percent')
   final double commissionPercent;
-  @JsonKey(name: 'is_active')
   final bool isActive;
-  @JsonKey(name: 'onboarded_at')
   final DateTime? onboardedAt;
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
-  @JsonKey(name: 'updated_at')
   final DateTime updatedAt;
 
   Society({
@@ -49,8 +34,47 @@ class Society {
     required this.updatedAt,
   });
 
-  factory Society.fromJson(Map<String, dynamic> json) => _$SocietyFromJson(json);
-  Map<String, dynamic> toJson() => _$SocietyToJson(this);
+  factory Society.fromJson(Map<String, dynamic> json) {
+    return Society(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      address: json['address'] as String,
+      city: json['city'] as String,
+      pincode: json['pincode'] as String,
+      totalFlats: json['total_flats'] as int?,
+      paytmMid: json['paytm_mid'] as String,
+      contactName: json['contact_name'] as String?,
+      contactPhone: json['contact_phone'] as String?,
+      contactEmail: json['contact_email'] as String?,
+      commissionPercent: (json['commission_percent'] as num?)?.toDouble() ?? 40.0,
+      isActive: json['is_active'] as bool? ?? true,
+      onboardedAt: json['onboarded_at'] != null
+          ? DateTime.parse(json['onboarded_at'] as String)
+          : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'address': address,
+      'city': city,
+      'pincode': pincode,
+      'total_flats': totalFlats,
+      'paytm_mid': paytmMid,
+      'contact_name': contactName,
+      'contact_phone': contactPhone,
+      'contact_email': contactEmail,
+      'commission_percent': commissionPercent,
+      'is_active': isActive,
+      'onboarded_at': onboardedAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
 
   Society copyWith({
     String? id,
@@ -90,4 +114,12 @@ class Society {
 
   @override
   String toString() => 'Society(id: $id, name: $name, city: $city)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Society && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

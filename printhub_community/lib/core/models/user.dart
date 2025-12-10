@@ -1,29 +1,16 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'user.g.dart';
-
 /// Model representing a registered app user
-@JsonSerializable()
 class AppUser {
   final String id;
   final String phone;
   final String name;
-  @JsonKey(name: 'society_id')
   final String societyId;
-  @JsonKey(name: 'flat_number')
   final String flatNumber;
   final String? email;
-  @JsonKey(name: 'total_orders')
   final int totalOrders;
-  @JsonKey(name: 'total_pages')
   final int totalPages;
-  @JsonKey(name: 'total_spent_paise')
   final int totalSpentPaise;
-  @JsonKey(name: 'is_active')
   final bool isActive;
-  @JsonKey(name: 'last_order_at')
   final DateTime? lastOrderAt;
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
   AppUser({
@@ -41,8 +28,41 @@ class AppUser {
     required this.createdAt,
   });
 
-  factory AppUser.fromJson(Map<String, dynamic> json) => _$AppUserFromJson(json);
-  Map<String, dynamic> toJson() => _$AppUserToJson(this);
+  factory AppUser.fromJson(Map<String, dynamic> json) {
+    return AppUser(
+      id: json['id'] as String,
+      phone: json['phone'] as String,
+      name: json['name'] as String,
+      societyId: json['society_id'] as String,
+      flatNumber: json['flat_number'] as String,
+      email: json['email'] as String?,
+      totalOrders: json['total_orders'] as int? ?? 0,
+      totalPages: json['total_pages'] as int? ?? 0,
+      totalSpentPaise: json['total_spent_paise'] as int? ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      lastOrderAt: json['last_order_at'] != null
+          ? DateTime.parse(json['last_order_at'] as String)
+          : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'phone': phone,
+      'name': name,
+      'society_id': societyId,
+      'flat_number': flatNumber,
+      'email': email,
+      'total_orders': totalOrders,
+      'total_pages': totalPages,
+      'total_spent_paise': totalSpentPaise,
+      'is_active': isActive,
+      'last_order_at': lastOrderAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
 
   AppUser copyWith({
     String? id,
@@ -82,4 +102,12 @@ class AppUser {
 
   @override
   String toString() => 'AppUser(id: $id, name: $name, phone: $phone)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppUser && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

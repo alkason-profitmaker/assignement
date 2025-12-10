@@ -1,31 +1,17 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'station.g.dart';
-
 /// Model representing a print station within a society
-@JsonSerializable()
 class Station {
   final String id;
-  @JsonKey(name: 'society_id')
   final String societyId;
   final String name;
-  @JsonKey(name: 'location_description')
   final String? locationDescription;
-  @JsonKey(name: 'epson_printer_email')
   final String epsonPrinterEmail;
-  @JsonKey(name: 'soundbox_id')
   final String? soundboxId;
-  @JsonKey(name: 'has_color')
   final bool hasColor;
-  @JsonKey(name: 'is_active')
   final bool isActive;
-  @JsonKey(name: 'last_health_check')
   final DateTime? lastHealthCheck;
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
   // Runtime status (not persisted)
-  @JsonKey(includeFromJson: false, includeToJson: false)
   final StationStatus? currentStatus;
 
   Station({
@@ -42,8 +28,37 @@ class Station {
     this.currentStatus,
   });
 
-  factory Station.fromJson(Map<String, dynamic> json) => _$StationFromJson(json);
-  Map<String, dynamic> toJson() => _$StationToJson(this);
+  factory Station.fromJson(Map<String, dynamic> json) {
+    return Station(
+      id: json['id'] as String,
+      societyId: json['society_id'] as String,
+      name: json['name'] as String,
+      locationDescription: json['location_description'] as String?,
+      epsonPrinterEmail: json['epson_printer_email'] as String,
+      soundboxId: json['soundbox_id'] as String?,
+      hasColor: json['has_color'] as bool? ?? true,
+      isActive: json['is_active'] as bool? ?? true,
+      lastHealthCheck: json['last_health_check'] != null
+          ? DateTime.parse(json['last_health_check'] as String)
+          : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'society_id': societyId,
+      'name': name,
+      'location_description': locationDescription,
+      'epson_printer_email': epsonPrinterEmail,
+      'soundbox_id': soundboxId,
+      'has_color': hasColor,
+      'is_active': isActive,
+      'last_health_check': lastHealthCheck?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
 
   Station copyWith({
     String? id,
@@ -78,6 +93,14 @@ class Station {
 
   @override
   String toString() => 'Station(id: $id, name: $name, isActive: $isActive)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Station && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Real-time status of a print station
@@ -105,10 +128,10 @@ class StationStatus {
   factory StationStatus.fromEpsonResponse(Map<String, dynamic> json) {
     return StationStatus(
       isOnline: json['connection'] == 'online',
-      inkLevelPercent: json['ink_level'] ?? 100,
-      paperLevel: json['paper_level'] ?? 100,
+      inkLevelPercent: json['ink_level'] as int? ?? 100,
+      paperLevel: json['paper_level'] as int? ?? 100,
       hasPaperJam: json['error_code'] == 'PAPER_JAM',
-      errorMessage: json['error_message'],
+      errorMessage: json['error_message'] as String?,
       checkedAt: DateTime.now(),
     );
   }
@@ -118,5 +141,16 @@ class StationStatus {
       isOnline: false,
       checkedAt: DateTime.now(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'is_online': isOnline,
+      'ink_level_percent': inkLevelPercent,
+      'paper_level': paperLevel,
+      'has_paper_jam': hasPaperJam,
+      'error_message': errorMessage,
+      'checked_at': checkedAt.toIso8601String(),
+    };
   }
 }

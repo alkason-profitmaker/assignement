@@ -1,27 +1,14 @@
-import 'package:json_annotation/json_annotation.dart';
-
-part 'credit.g.dart';
-
 /// Model representing user credits (goodwill credits for failures)
-@JsonSerializable()
 class Credit {
   final String id;
-  @JsonKey(name: 'user_id')
   final String userId;
-  @JsonKey(name: 'pages_bw')
   final int pagesBw;
-  @JsonKey(name: 'pages_color')
   final int pagesColor;
-  @JsonKey(name: 'pages_bw_used')
   final int pagesBwUsed;
-  @JsonKey(name: 'pages_color_used')
   final int pagesColorUsed;
   final String reason;
-  @JsonKey(name: 'source_order_id')
   final String? sourceOrderId;
-  @JsonKey(name: 'expires_at')
   final DateTime expiresAt;
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
   Credit({
@@ -37,8 +24,35 @@ class Credit {
     required this.createdAt,
   });
 
-  factory Credit.fromJson(Map<String, dynamic> json) => _$CreditFromJson(json);
-  Map<String, dynamic> toJson() => _$CreditToJson(this);
+  factory Credit.fromJson(Map<String, dynamic> json) {
+    return Credit(
+      id: json['id'] as String,
+      userId: json['user_id'] as String,
+      pagesBw: json['pages_bw'] as int,
+      pagesColor: json['pages_color'] as int? ?? 0,
+      pagesBwUsed: json['pages_bw_used'] as int? ?? 0,
+      pagesColorUsed: json['pages_color_used'] as int? ?? 0,
+      reason: json['reason'] as String,
+      sourceOrderId: json['source_order_id'] as String?,
+      expiresAt: DateTime.parse(json['expires_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'pages_bw': pagesBw,
+      'pages_color': pagesColor,
+      'pages_bw_used': pagesBwUsed,
+      'pages_color_used': pagesColorUsed,
+      'reason': reason,
+      'source_order_id': sourceOrderId,
+      'expires_at': expiresAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
 
   /// Remaining B/W pages
   int get remainingBwPages => pagesBw - pagesBwUsed;
@@ -79,7 +93,16 @@ class Credit {
   }
 
   @override
-  String toString() => 'Credit(id: $id, bw: $remainingBwPages, color: $remainingColorPages)';
+  String toString() =>
+      'Credit(id: $id, bw: $remainingBwPages, color: $remainingColorPages)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Credit && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Summary of user's available credits
@@ -110,7 +133,8 @@ class CreditSummary {
     final activeCredits = credits.where((c) => c.hasValue).toList();
     return CreditSummary(
       totalBwPages: activeCredits.fold(0, (sum, c) => sum + c.remainingBwPages),
-      totalColorPages: activeCredits.fold(0, (sum, c) => sum + c.remainingColorPages),
+      totalColorPages:
+          activeCredits.fold(0, (sum, c) => sum + c.remainingColorPages),
       activeCredits: activeCredits,
     );
   }

@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
-import 'core/config/app_flavor.dart';
-import 'main.dart' as app;
+import 'core/config/environment.dart';
+import 'main.dart';
 
-void main() {
-  AppFlavor.setFlavor('staging');
-  app.main();
+/// Staging environment entry point
+///
+/// Run with: flutter run -t lib/main_staging.dart --flavor staging
+/// Build with: flutter build apk -t lib/main_staging.dart --flavor staging
+void main() async {
+  await initializeApp(Environment.staging);
 }

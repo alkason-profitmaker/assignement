@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';
-import 'core/config/app_flavor.dart';
-import 'main.dart' as app;
+import 'core/config/environment.dart';
+import 'main.dart';
 
-void main() {
-  AppFlavor.setFlavor('development');
-  app.main();
+/// Development environment entry point
+///
+/// Run with: flutter run -t lib/main_development.dart --flavor development
+/// Build with: flutter build apk -t lib/main_development.dart --flavor development
+void main() async {
+  await initializeApp(Environment.development);
 }

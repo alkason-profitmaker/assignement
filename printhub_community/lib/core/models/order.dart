@@ -1,68 +1,36 @@
-import 'package:json_annotation/json_annotation.dart';
 import '../constants/app_constants.dart';
 
-part 'order.g.dart';
-
 /// Model representing a print order
-@JsonSerializable()
 class PrintOrder {
   final String id;
-  @JsonKey(name: 'order_number')
   final int orderNumber;
-  @JsonKey(name: 'user_id')
   final String userId;
-  @JsonKey(name: 'society_id')
   final String societyId;
-  @JsonKey(name: 'station_id')
   final String stationId;
-  @JsonKey(name: 'file_name')
   final String fileName;
-  @JsonKey(name: 'file_hash')
   final String? fileHash;
-  @JsonKey(name: 'total_pages')
   final int totalPages;
-  @JsonKey(name: 'bw_pages')
   final int bwPages;
-  @JsonKey(name: 'color_pages')
   final int colorPages;
   final int copies;
-  @JsonKey(name: 'amount_paise')
   final int amountPaise;
-  @JsonKey(name: 'credits_used_paise')
   final int creditsUsedPaise;
-  @JsonKey(name: 'final_amount_paise')
   final int finalAmountPaise;
-  @JsonKey(name: 'paytm_order_id')
   final String? paytmOrderId;
-  @JsonKey(name: 'paytm_txn_id')
   final String? paytmTxnId;
-  @JsonKey(name: 'payment_status')
   final String paymentStatus;
-  @JsonKey(name: 'paid_at')
   final DateTime? paidAt;
-  @JsonKey(name: 'epson_job_id')
   final String? epsonJobId;
-  @JsonKey(name: 'print_status')
   final String printStatus;
-  @JsonKey(name: 'print_error_code')
   final String? printErrorCode;
-  @JsonKey(name: 'printed_at')
   final DateTime? printedAt;
-  @JsonKey(name: 'refund_status')
   final String? refundStatus;
-  @JsonKey(name: 'refund_reason')
   final String? refundReason;
-  @JsonKey(name: 'refund_type')
   final String? refundType;
-  @JsonKey(name: 'paytm_refund_id')
   final String? paytmRefundId;
-  @JsonKey(name: 'goodwill_credit_given')
   final bool goodwillCreditGiven;
-  @JsonKey(name: 'expires_at')
   final DateTime expiresAt;
-  @JsonKey(name: 'created_at')
   final DateTime createdAt;
-  @JsonKey(name: 'updated_at')
   final DateTime updatedAt;
 
   PrintOrder({
@@ -98,8 +66,79 @@ class PrintOrder {
     required this.updatedAt,
   });
 
-  factory PrintOrder.fromJson(Map<String, dynamic> json) => _$PrintOrderFromJson(json);
-  Map<String, dynamic> toJson() => _$PrintOrderToJson(this);
+  factory PrintOrder.fromJson(Map<String, dynamic> json) {
+    return PrintOrder(
+      id: json['id'] as String,
+      orderNumber: json['order_number'] as int,
+      userId: json['user_id'] as String,
+      societyId: json['society_id'] as String,
+      stationId: json['station_id'] as String,
+      fileName: json['file_name'] as String,
+      fileHash: json['file_hash'] as String?,
+      totalPages: json['total_pages'] as int,
+      bwPages: json['bw_pages'] as int,
+      colorPages: json['color_pages'] as int,
+      copies: json['copies'] as int? ?? 1,
+      amountPaise: json['amount_paise'] as int,
+      creditsUsedPaise: json['credits_used_paise'] as int? ?? 0,
+      finalAmountPaise: json['final_amount_paise'] as int,
+      paytmOrderId: json['paytm_order_id'] as String?,
+      paytmTxnId: json['paytm_txn_id'] as String?,
+      paymentStatus: json['payment_status'] as String? ?? 'PENDING',
+      paidAt: json['paid_at'] != null
+          ? DateTime.parse(json['paid_at'] as String)
+          : null,
+      epsonJobId: json['epson_job_id'] as String?,
+      printStatus: json['print_status'] as String? ?? 'WAITING',
+      printErrorCode: json['print_error_code'] as String?,
+      printedAt: json['printed_at'] != null
+          ? DateTime.parse(json['printed_at'] as String)
+          : null,
+      refundStatus: json['refund_status'] as String?,
+      refundReason: json['refund_reason'] as String?,
+      refundType: json['refund_type'] as String?,
+      paytmRefundId: json['paytm_refund_id'] as String?,
+      goodwillCreditGiven: json['goodwill_credit_given'] as bool? ?? false,
+      expiresAt: DateTime.parse(json['expires_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'order_number': orderNumber,
+      'user_id': userId,
+      'society_id': societyId,
+      'station_id': stationId,
+      'file_name': fileName,
+      'file_hash': fileHash,
+      'total_pages': totalPages,
+      'bw_pages': bwPages,
+      'color_pages': colorPages,
+      'copies': copies,
+      'amount_paise': amountPaise,
+      'credits_used_paise': creditsUsedPaise,
+      'final_amount_paise': finalAmountPaise,
+      'paytm_order_id': paytmOrderId,
+      'paytm_txn_id': paytmTxnId,
+      'payment_status': paymentStatus,
+      'paid_at': paidAt?.toIso8601String(),
+      'epson_job_id': epsonJobId,
+      'print_status': printStatus,
+      'print_error_code': printErrorCode,
+      'printed_at': printedAt?.toIso8601String(),
+      'refund_status': refundStatus,
+      'refund_reason': refundReason,
+      'refund_type': refundType,
+      'paytm_refund_id': paytmRefundId,
+      'goodwill_credit_given': goodwillCreditGiven,
+      'expires_at': expiresAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
 
   // Computed properties
   double get amountRupees => amountPaise / 100;
@@ -196,7 +235,16 @@ class PrintOrder {
   }
 
   @override
-  String toString() => 'PrintOrder(id: $id, orderNumber: $orderNumber, status: $printStatus)';
+  String toString() =>
+      'PrintOrder(id: $id, orderNumber: $orderNumber, status: $printStatus)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PrintOrder && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// Request model for creating a new order
