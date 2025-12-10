@@ -1,23 +1,31 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+
 import '../constants/supabase_constants.dart';
+import '../logging/app_logger.dart';
 
 /// Service for Paytm Dynamic QR and payment operations
-/// Note: Actual payment is done via Soundbox, this handles QR generation and webhooks
+/// Handles QR generation for Soundbox payments and refund processing
 class PaytmService {
   final String merchantId;
   final String merchantKey;
-  final bool isProduction;
+  final String website;
+  final String industryType;
+  final String channelId;
+  final String baseUrl;
+
+  final http.Client _client;
 
   PaytmService({
     required this.merchantId,
     required this.merchantKey,
-    this.isProduction = false,
-  });
-
-  String get _baseUrl =>
-      isProduction ? ApiEndpoints.paytmBaseUrl : ApiEndpoints.paytmStagingUrl;
+    required this.website,
+    required this.industryType,
+    required this.channelId,
+    required this.baseUrl,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   // ============================================
   // QR Code Generation
@@ -30,7 +38,9 @@ class PaytmService {
     required double amount,
     String? posId,
   }) async {
-    final url = '$_baseUrl${ApiEndpoints.generateQrEndpoint}';
+    final url = '$baseUrl${ApiEndpoints.generateQrEndpoint}';
+
+    AppLogger.debug('Generating Paytm QR for order: $orderId, amount: $amount', tag: 'Paytm');
 
     final body = {
       'mid': merchantId,
@@ -40,31 +50,47 @@ class PaytmService {
       if (posId != null) 'posId': posId,
     };
 
-    // Generate checksum
+    // Generate checksum for request body
     final checksum = _generateChecksum(body);
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $merchantKey',
-      },
-      body: jsonEncode({
-        ...body,
+    final requestBody = {
+      'body': body,
+      'head': {
         'signature': checksum,
-      }),
-    );
+      }
+    };
 
-    if (response.statusCode != 200) {
-      throw PaytmException(
-        'QR generation failed',
-        statusCode: response.statusCode,
-        body: response.body,
+    try {
+      final response = await _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
       );
-    }
 
-    final data = jsonDecode(response.body);
-    return PaytmQrResponse.fromJson(data);
+      AppLogger.debug('Paytm QR response: ${response.statusCode}', tag: 'Paytm');
+
+      if (response.statusCode != 200) {
+        throw PaytmException(
+          'QR generation failed',
+          statusCode: response.statusCode,
+          body: response.body,
+        );
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final result = PaytmQrResponse.fromJson(data);
+
+      if (!result.success) {
+        throw PaytmException(result.errorMessage ?? 'QR generation failed');
+      }
+
+      return result;
+    } catch (e) {
+      AppLogger.error('Paytm QR generation error', error: e, tag: 'Paytm');
+      rethrow;
+    }
   }
 
   // ============================================
@@ -73,7 +99,9 @@ class PaytmService {
 
   /// Check transaction status
   Future<PaytmTransactionStatus> getTransactionStatus(String orderId) async {
-    final url = '$_baseUrl${ApiEndpoints.txnStatusEndpoint}';
+    final url = '$baseUrl${ApiEndpoints.txnStatusEndpoint}';
+
+    AppLogger.debug('Checking transaction status for: $orderId', tag: 'Paytm');
 
     final body = {
       'mid': merchantId,
@@ -82,27 +110,34 @@ class PaytmService {
 
     final checksum = _generateChecksum(body);
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        ...body,
-        'signature': checksum,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw PaytmException(
-        'Status check failed',
-        statusCode: response.statusCode,
-        body: response.body,
+    try {
+      final response = await _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'body': body,
+          'head': {
+            'signature': checksum,
+          }
+        }),
       );
-    }
 
-    final data = jsonDecode(response.body);
-    return PaytmTransactionStatus.fromJson(data);
+      if (response.statusCode != 200) {
+        throw PaytmException(
+          'Status check failed',
+          statusCode: response.statusCode,
+          body: response.body,
+        );
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return PaytmTransactionStatus.fromJson(data);
+    } catch (e) {
+      AppLogger.error('Paytm status check error', error: e, tag: 'Paytm');
+      rethrow;
+    }
   }
 
   // ============================================
@@ -116,10 +151,13 @@ class PaytmService {
     required String refundId,
     required double amount,
   }) async {
-    final url = '$_baseUrl${ApiEndpoints.refundEndpoint}';
+    final url = '$baseUrl${ApiEndpoints.refundEndpoint}';
+
+    AppLogger.info('Initiating refund for order: $orderId, amount: $amount', tag: 'Paytm');
 
     final body = {
       'mid': merchantId,
+      'txnType': 'REFUND',
       'orderId': orderId,
       'txnId': txnId,
       'refId': refundId,
@@ -128,27 +166,43 @@ class PaytmService {
 
     final checksum = _generateChecksum(body);
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        ...body,
-        'signature': checksum,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw PaytmException(
-        'Refund failed',
-        statusCode: response.statusCode,
-        body: response.body,
+    try {
+      final response = await _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'body': body,
+          'head': {
+            'signature': checksum,
+          }
+        }),
       );
-    }
 
-    final data = jsonDecode(response.body);
-    return PaytmRefundResponse.fromJson(data);
+      AppLogger.debug('Paytm refund response: ${response.statusCode}', tag: 'Paytm');
+
+      if (response.statusCode != 200) {
+        throw PaytmException(
+          'Refund failed',
+          statusCode: response.statusCode,
+          body: response.body,
+        );
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final result = PaytmRefundResponse.fromJson(data);
+
+      if (!result.success) {
+        throw PaytmException(result.errorMessage ?? 'Refund failed');
+      }
+
+      AppLogger.info('Refund successful for order: $orderId', tag: 'Paytm');
+      return result;
+    } catch (e) {
+      AppLogger.error('Paytm refund error', error: e, tag: 'Paytm');
+      rethrow;
+    }
   }
 
   // ============================================
@@ -157,8 +211,23 @@ class PaytmService {
 
   /// Verify webhook signature from Paytm
   bool verifyWebhookSignature(Map<String, dynamic> payload, String signature) {
-    final calculatedSignature = _generateChecksum(payload);
-    return calculatedSignature == signature;
+    try {
+      // For webhook verification, exclude the checksum field
+      final params = Map<String, dynamic>.from(payload)
+        ..remove('CHECKSUMHASH');
+
+      final calculatedSignature = _generateChecksum(params);
+      final isValid = calculatedSignature == signature;
+
+      if (!isValid) {
+        AppLogger.warning('Webhook signature mismatch', tag: 'Paytm');
+      }
+
+      return isValid;
+    } catch (e) {
+      AppLogger.error('Webhook verification error', error: e, tag: 'Paytm');
+      return false;
+    }
   }
 
   // ============================================
@@ -178,6 +247,10 @@ class PaytmService {
 
     return base64.encode(digest.bytes);
   }
+
+  void dispose() {
+    _client.close();
+  }
 }
 
 // ============================================
@@ -187,28 +260,39 @@ class PaytmService {
 class PaytmQrResponse {
   final bool success;
   final String? qrCodeId;
+  final String? qrString;
+  final String? paytmOrderId;
   final String? qrData;
   final String? imageBase64;
   final String? errorMessage;
+  final String? errorCode;
 
   PaytmQrResponse({
     required this.success,
     this.qrCodeId,
+    this.qrString,
+    this.paytmOrderId,
     this.qrData,
     this.imageBase64,
     this.errorMessage,
+    this.errorCode,
   });
 
   factory PaytmQrResponse.fromJson(Map<String, dynamic> json) {
-    final resultCode = json['resultCode'] as String?;
-    final success = resultCode == '0000';
+    final body = json['body'] as Map<String, dynamic>?;
+    final resultInfo = body?['resultInfo'] as Map<String, dynamic>?;
+    final resultCode = resultInfo?['resultCode'] as String?;
+    final success = resultCode == '0000' || resultCode == 'SUCCESS';
 
     return PaytmQrResponse(
       success: success,
-      qrCodeId: json['qrCodeId'] as String?,
-      qrData: json['qrData'] as String?,
-      imageBase64: json['image'] as String?,
-      errorMessage: success ? null : json['resultMsg'] as String?,
+      qrCodeId: body?['qrCodeId'] as String?,
+      qrString: body?['qrData'] as String?,
+      paytmOrderId: body?['orderId'] as String?,
+      qrData: body?['qrData'] as String?,
+      imageBase64: body?['image'] as String?,
+      errorMessage: success ? null : resultInfo?['resultMsg'] as String?,
+      errorCode: success ? null : resultCode,
     );
   }
 }
@@ -221,6 +305,8 @@ class PaytmTransactionStatus {
   final double? amount;
   final String? paymentMode;
   final DateTime? txnDate;
+  final String? resultCode;
+  final String? resultMessage;
 
   PaytmTransactionStatus({
     required this.success,
@@ -230,6 +316,8 @@ class PaytmTransactionStatus {
     this.amount,
     this.paymentMode,
     this.txnDate,
+    this.resultCode,
+    this.resultMessage,
   });
 
   bool get isPaid => status == 'TXN_SUCCESS';
@@ -251,6 +339,8 @@ class PaytmTransactionStatus {
       txnDate: body?['txnDate'] != null
           ? DateTime.tryParse(body!['txnDate'] as String)
           : null,
+      resultCode: resultInfo?['resultCode'] as String?,
+      resultMessage: resultInfo?['resultMsg'] as String?,
     );
   }
 }
@@ -262,6 +352,7 @@ class PaytmRefundResponse {
   final String? txnId;
   final double? refundAmount;
   final String? errorMessage;
+  final String? resultCode;
 
   PaytmRefundResponse({
     required this.success,
@@ -270,6 +361,7 @@ class PaytmRefundResponse {
     this.txnId,
     this.refundAmount,
     this.errorMessage,
+    this.resultCode,
   });
 
   factory PaytmRefundResponse.fromJson(Map<String, dynamic> json) {
@@ -284,6 +376,7 @@ class PaytmRefundResponse {
       txnId: body?['txnId'] as String?,
       refundAmount: double.tryParse(body?['refundAmount']?.toString() ?? ''),
       errorMessage: status != 'TXN_SUCCESS' ? resultInfo?['resultMsg'] as String? : null,
+      resultCode: resultInfo?['resultCode'] as String?,
     );
   }
 }
@@ -300,6 +393,7 @@ class PaytmWebhookPayload {
   final String paymentMode;
   final DateTime txnDate;
   final String signature;
+  final String mid;
 
   PaytmWebhookPayload({
     required this.orderId,
@@ -309,6 +403,7 @@ class PaytmWebhookPayload {
     required this.paymentMode,
     required this.txnDate,
     required this.signature,
+    required this.mid,
   });
 
   bool get isSuccess => status == 'TXN_SUCCESS';
@@ -322,8 +417,20 @@ class PaytmWebhookPayload {
       paymentMode: json['PAYMENTMODE'] as String? ?? 'UPI',
       txnDate: DateTime.parse(json['TXNDATE'] as String),
       signature: json['CHECKSUMHASH'] as String,
+      mid: json['MID'] as String,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'ORDERID': orderId,
+    'TXNID': txnId,
+    'STATUS': status,
+    'TXNAMOUNT': amount.toStringAsFixed(2),
+    'PAYMENTMODE': paymentMode,
+    'TXNDATE': txnDate.toIso8601String(),
+    'CHECKSUMHASH': signature,
+    'MID': mid,
+  };
 }
 
 // ============================================
@@ -334,9 +441,15 @@ class PaytmException implements Exception {
   final String message;
   final int? statusCode;
   final String? body;
+  final String? code;
 
-  PaytmException(this.message, {this.statusCode, this.body});
+  PaytmException(
+    this.message, {
+    this.statusCode,
+    this.body,
+    this.code,
+  });
 
   @override
-  String toString() => 'PaytmException: $message (status: $statusCode)';
+  String toString() => 'PaytmException: $message${statusCode != null ? ' (HTTP $statusCode)' : ''}${code != null ? ' [$code]' : ''}';
 }

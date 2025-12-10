@@ -1,22 +1,65 @@
-/// Environment configuration for PrintHub Community
-///
-/// This supports three environments:
-/// - Development: For local testing with mock data
-/// - Staging: For QA testing with staging servers
-/// - Production: For live app deployment
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+/// Environment types supported by the application
 enum Environment {
   development,
   staging,
-  production,
+  production;
+
+  String get envFileName {
+    switch (this) {
+      case Environment.development:
+        return '.env.development';
+      case Environment.staging:
+        return '.env.staging';
+      case Environment.production:
+        return '.env.production';
+    }
+  }
 }
 
+/// Configuration validation exception
+class ConfigurationException implements Exception {
+  final String message;
+  final List<String> missingKeys;
+
+  ConfigurationException(this.message, [this.missingKeys = const []]);
+
+  @override
+  String toString() {
+    if (missingKeys.isEmpty) {
+      return 'ConfigurationException: $message';
+    }
+    return 'ConfigurationException: $message\nMissing keys: ${missingKeys.join(', ')}';
+  }
+}
+
+/// Environment configuration loaded from .env files
 class EnvironmentConfig {
   final Environment environment;
-  final String appName;
+
+  // Supabase
   final String supabaseUrl;
   final String supabaseAnonKey;
+  final String? supabaseServiceRoleKey;
+
+  // Paytm
+  final String paytmMerchantId;
+  final String paytmMerchantKey;
+  final String paytmWebsite;
+  final String paytmIndustryType;
+  final String paytmChannelId;
   final String paytmBaseUrl;
+
+  // Epson Connect
+  final String epsonClientId;
+  final String epsonClientSecret;
+  final String epsonRefreshToken;
   final String epsonBaseUrl;
+
+  // App Settings
+  final String appName;
+  final bool debugMode;
   final bool enableLogging;
   final bool enableCrashlytics;
   final bool enableAnalytics;
@@ -25,11 +68,21 @@ class EnvironmentConfig {
 
   const EnvironmentConfig._({
     required this.environment,
-    required this.appName,
     required this.supabaseUrl,
     required this.supabaseAnonKey,
+    this.supabaseServiceRoleKey,
+    required this.paytmMerchantId,
+    required this.paytmMerchantKey,
+    required this.paytmWebsite,
+    required this.paytmIndustryType,
+    required this.paytmChannelId,
     required this.paytmBaseUrl,
+    required this.epsonClientId,
+    required this.epsonClientSecret,
+    required this.epsonRefreshToken,
     required this.epsonBaseUrl,
+    required this.appName,
+    required this.debugMode,
     required this.enableLogging,
     required this.enableCrashlytics,
     required this.enableAnalytics,
@@ -37,55 +90,80 @@ class EnvironmentConfig {
     required this.maxRetries,
   });
 
-  /// Development configuration
-  factory EnvironmentConfig.development() {
-    return const EnvironmentConfig._(
-      environment: Environment.development,
-      appName: 'PrintHub Dev',
-      supabaseUrl: 'https://your-dev-project.supabase.co',
-      supabaseAnonKey: 'your-dev-anon-key',
-      paytmBaseUrl: 'https://securegw-stage.paytm.in',
-      epsonBaseUrl: 'https://api.epsonconnect.com',
-      enableLogging: true,
-      enableCrashlytics: false,
-      enableAnalytics: false,
-      apiTimeout: Duration(seconds: 60),
-      maxRetries: 5,
+  /// Load configuration from .env file
+  static Future<EnvironmentConfig> load(Environment env) async {
+    await dotenv.load(fileName: env.envFileName);
+
+    // Validate required keys
+    final requiredKeys = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'PAYTM_MERCHANT_ID',
+      'PAYTM_MERCHANT_KEY',
+      'EPSON_CLIENT_ID',
+      'EPSON_CLIENT_SECRET',
+      'EPSON_REFRESH_TOKEN',
+    ];
+
+    final missingKeys = <String>[];
+    for (final key in requiredKeys) {
+      final value = dotenv.env[key];
+      if (value == null || value.isEmpty) {
+        missingKeys.add(key);
+      }
+    }
+
+    if (missingKeys.isNotEmpty) {
+      throw ConfigurationException(
+        'Required environment variables are not configured. '
+        'Please update your ${env.envFileName} file.',
+        missingKeys,
+      );
+    }
+
+    return EnvironmentConfig._(
+      environment: env,
+      supabaseUrl: _getRequired('SUPABASE_URL'),
+      supabaseAnonKey: _getRequired('SUPABASE_ANON_KEY'),
+      supabaseServiceRoleKey: dotenv.env['SUPABASE_SERVICE_ROLE_KEY'],
+      paytmMerchantId: _getRequired('PAYTM_MERCHANT_ID'),
+      paytmMerchantKey: _getRequired('PAYTM_MERCHANT_KEY'),
+      paytmWebsite: dotenv.env['PAYTM_WEBSITE'] ?? 'WEBSTAGING',
+      paytmIndustryType: dotenv.env['PAYTM_INDUSTRY_TYPE'] ?? 'Retail',
+      paytmChannelId: dotenv.env['PAYTM_CHANNEL_ID'] ?? 'WAP',
+      paytmBaseUrl: dotenv.env['PAYTM_BASE_URL'] ?? 'https://securegw-stage.paytm.in',
+      epsonClientId: _getRequired('EPSON_CLIENT_ID'),
+      epsonClientSecret: _getRequired('EPSON_CLIENT_SECRET'),
+      epsonRefreshToken: _getRequired('EPSON_REFRESH_TOKEN'),
+      epsonBaseUrl: dotenv.env['EPSON_BASE_URL'] ?? 'https://api.epsonconnect.com',
+      appName: dotenv.env['APP_NAME'] ?? 'PrintHub',
+      debugMode: _getBool('DEBUG_MODE', env != Environment.production),
+      enableLogging: _getBool('ENABLE_LOGGING', env != Environment.production),
+      enableCrashlytics: _getBool('ENABLE_CRASHLYTICS', env != Environment.development),
+      enableAnalytics: _getBool('ENABLE_ANALYTICS', env == Environment.production),
+      apiTimeout: Duration(seconds: _getInt('API_TIMEOUT', 30)),
+      maxRetries: _getInt('MAX_RETRIES', 3),
     );
   }
 
-  /// Staging configuration
-  factory EnvironmentConfig.staging() {
-    return const EnvironmentConfig._(
-      environment: Environment.staging,
-      appName: 'PrintHub Staging',
-      supabaseUrl: 'https://your-staging-project.supabase.co',
-      supabaseAnonKey: 'your-staging-anon-key',
-      paytmBaseUrl: 'https://securegw-stage.paytm.in',
-      epsonBaseUrl: 'https://api.epsonconnect.com',
-      enableLogging: true,
-      enableCrashlytics: true,
-      enableAnalytics: false,
-      apiTimeout: Duration(seconds: 45),
-      maxRetries: 3,
-    );
+  static String _getRequired(String key) {
+    final value = dotenv.env[key];
+    if (value == null || value.isEmpty) {
+      throw ConfigurationException('Required key $key is not set');
+    }
+    return value;
   }
 
-  /// Production configuration
-  factory EnvironmentConfig.production() {
-    return const EnvironmentConfig._(
-      environment: Environment.production,
-      appName: 'PrintHub',
-      supabaseUrl: 'https://your-prod-project.supabase.co',
-      supabaseAnonKey: 'your-prod-anon-key',
-      paytmBaseUrl: 'https://securegw.paytm.in',
-      epsonBaseUrl: 'https://api.epsonconnect.com',
-      enableLogging: false,
-      enableCrashlytics: true,
-      enableAnalytics: true,
-      apiTimeout: Duration(seconds: 30),
-      maxRetries: 3,
-    );
+  static bool _getBool(String key, bool defaultValue) {
+    final value = dotenv.env[key]?.toLowerCase();
+    if (value == null) return defaultValue;
+    return value == 'true' || value == '1' || value == 'yes';
+  }
+
+  static int _getInt(String key, int defaultValue) {
+    final value = dotenv.env[key];
+    if (value == null) return defaultValue;
+    return int.tryParse(value) ?? defaultValue;
   }
 
   bool get isDevelopment => environment == Environment.development;
@@ -96,36 +174,50 @@ class EnvironmentConfig {
 
 /// Global app configuration singleton
 class AppConfig {
-  static late EnvironmentConfig _config;
+  static EnvironmentConfig? _config;
+  static bool _initialized = false;
 
-  static void initialize(Environment env) {
-    switch (env) {
-      case Environment.development:
-        _config = EnvironmentConfig.development();
-        break;
-      case Environment.staging:
-        _config = EnvironmentConfig.staging();
-        break;
-      case Environment.production:
-        _config = EnvironmentConfig.production();
-        break;
-    }
+  /// Initialize configuration from .env file
+  static Future<void> initialize(Environment env) async {
+    if (_initialized) return;
+    _config = await EnvironmentConfig.load(env);
+    _initialized = true;
   }
 
-  static EnvironmentConfig get instance => _config;
+  /// Check if configuration is initialized
+  static bool get isInitialized => _initialized;
+
+  /// Get current configuration instance
+  static EnvironmentConfig get instance {
+    if (_config == null) {
+      throw ConfigurationException(
+        'AppConfig not initialized. Call AppConfig.initialize() first.',
+      );
+    }
+    return _config!;
+  }
 
   // Convenience getters
-  static Environment get environment => _config.environment;
-  static String get appName => _config.appName;
-  static String get supabaseUrl => _config.supabaseUrl;
-  static String get supabaseAnonKey => _config.supabaseAnonKey;
-  static String get paytmBaseUrl => _config.paytmBaseUrl;
-  static String get epsonBaseUrl => _config.epsonBaseUrl;
-  static bool get enableLogging => _config.enableLogging;
-  static bool get enableCrashlytics => _config.enableCrashlytics;
-  static bool get enableAnalytics => _config.enableAnalytics;
-  static Duration get apiTimeout => _config.apiTimeout;
-  static int get maxRetries => _config.maxRetries;
-  static bool get isProduction => _config.isProduction;
-  static bool get isDebugMode => _config.isDebugMode;
+  static Environment get environment => instance.environment;
+  static String get appName => instance.appName;
+  static String get supabaseUrl => instance.supabaseUrl;
+  static String get supabaseAnonKey => instance.supabaseAnonKey;
+  static String? get supabaseServiceRoleKey => instance.supabaseServiceRoleKey;
+  static String get paytmMerchantId => instance.paytmMerchantId;
+  static String get paytmMerchantKey => instance.paytmMerchantKey;
+  static String get paytmWebsite => instance.paytmWebsite;
+  static String get paytmIndustryType => instance.paytmIndustryType;
+  static String get paytmChannelId => instance.paytmChannelId;
+  static String get paytmBaseUrl => instance.paytmBaseUrl;
+  static String get epsonClientId => instance.epsonClientId;
+  static String get epsonClientSecret => instance.epsonClientSecret;
+  static String get epsonRefreshToken => instance.epsonRefreshToken;
+  static String get epsonBaseUrl => instance.epsonBaseUrl;
+  static bool get enableLogging => instance.enableLogging;
+  static bool get enableCrashlytics => instance.enableCrashlytics;
+  static bool get enableAnalytics => instance.enableAnalytics;
+  static Duration get apiTimeout => instance.apiTimeout;
+  static int get maxRetries => instance.maxRetries;
+  static bool get isProduction => instance.isProduction;
+  static bool get isDebugMode => instance.isDebugMode;
 }
