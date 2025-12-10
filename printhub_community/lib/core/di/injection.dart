@@ -23,7 +23,7 @@ Future<void> configureDependencies() async {
 
   // Services
   getIt.registerLazySingleton<SupabaseService>(
-    () => SupabaseService(getIt<SupabaseClient>()),
+    () => SupabaseService(),
   );
 
   getIt.registerLazySingleton<PaytmService>(
@@ -41,8 +41,6 @@ Future<void> configureDependencies() async {
     () => EpsonService(
       clientId: AppConfig.epsonClientId,
       clientSecret: AppConfig.epsonClientSecret,
-      refreshToken: AppConfig.epsonRefreshToken,
-      baseUrl: AppConfig.epsonBaseUrl,
     ),
   );
 

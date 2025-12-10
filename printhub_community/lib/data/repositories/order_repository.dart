@@ -143,7 +143,13 @@ class OrderRepositoryImpl implements OrderRepository {
     int offset = 0,
   }) async {
     try {
+      final userId = _supabaseService.currentUserId;
+      if (userId == null) {
+        return Left(AuthFailure(message: 'User not authenticated'));
+      }
+
       final orders = await _supabaseService.getUserOrders(
+        userId: userId,
         limit: limit,
         offset: offset,
       );
@@ -184,14 +190,23 @@ class OrderRepositoryImpl implements OrderRepository {
               amount: order.finalAmountPaise / 100,
             );
 
-            // Update order with Paytm order ID
-            await _supabaseService.updateOrder(
-              orderId: orderId,
-              paytmOrderId: qrData.paytmOrderId,
-            );
+            if (qrData.qrString == null) {
+              return Left(PaymentFailure(
+                message: qrData.errorMessage ?? 'Failed to generate QR code',
+                code: qrData.errorCode,
+              ));
+            }
+
+            // Update order with Paytm order ID if available
+            if (qrData.paytmOrderId != null) {
+              await _supabaseService.updateOrder(
+                orderId: orderId,
+                paytmOrderId: qrData.paytmOrderId,
+              );
+            }
 
             return Right(PaymentQrData(
-              qrString: qrData.qrString,
+              qrString: qrData.qrString!,
               orderId: orderId,
               amountPaise: order.finalAmountPaise,
               expiresAt: DateTime.now().add(const Duration(minutes: 15)),

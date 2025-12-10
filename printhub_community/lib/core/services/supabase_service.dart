@@ -245,16 +245,70 @@ class SupabaseService {
     return PrintOrder.fromJson(response);
   }
 
-  /// Update order with Paytm order ID
-  Future<PrintOrder> updateOrderPaytmId(String orderId, String paytmOrderId) async {
+  /// Alias for getOrder (used by repositories)
+  Future<PrintOrder?> getOrderById(String orderId) => getOrder(orderId);
+
+  /// Get active (pending/processing) orders for current user
+  Future<List<PrintOrder>> getActiveOrders() async {
+    final userId = currentUserId;
+    if (userId == null) return [];
+
     final response = await _client
         .from(SupabaseConstants.ordersTable)
-        .update({'paytm_order_id': paytmOrderId})
+        .select()
+        .eq('user_id', userId)
+        .inFilter('status', ['pending', 'processing', 'printing'])
+        .order('created_at', ascending: false);
+
+    return response.map((json) => PrintOrder.fromJson(json)).toList();
+  }
+
+  /// Update order fields
+  Future<PrintOrder> updateOrder({
+    required String orderId,
+    String? paytmOrderId,
+    String? refundStatus,
+    String? refundReason,
+    String? refundType,
+    String? status,
+    String? printStatus,
+  }) async {
+    final updates = <String, dynamic>{};
+    if (paytmOrderId != null) updates['paytm_order_id'] = paytmOrderId;
+    if (refundStatus != null) updates['refund_status'] = refundStatus;
+    if (refundReason != null) updates['refund_reason'] = refundReason;
+    if (refundType != null) updates['refund_type'] = refundType;
+    if (status != null) updates['status'] = status;
+    if (printStatus != null) updates['print_status'] = printStatus;
+
+    final response = await _client
+        .from(SupabaseConstants.ordersTable)
+        .update(updates)
         .eq('id', orderId)
         .select()
         .single();
 
     return PrintOrder.fromJson(response);
+  }
+
+  /// Update order with Paytm order ID (legacy method)
+  Future<PrintOrder> updateOrderPaytmId(String orderId, String paytmOrderId) async {
+    return updateOrder(orderId: orderId, paytmOrderId: paytmOrderId);
+  }
+
+  /// Upload document to Supabase storage
+  Future<String> uploadDocument({
+    required String orderId,
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    final path = 'orders/$orderId/$fileName';
+
+    await _client.storage
+        .from(SupabaseConstants.documentsBucket)
+        .uploadBinary(path, bytes as dynamic);
+
+    return path;
   }
 
   /// Subscribe to order updates
@@ -265,6 +319,9 @@ class SupabaseService {
         .eq('id', orderId)
         .map((data) => PrintOrder.fromJson(data.first));
   }
+
+  /// Alias for subscribeToOrder (used by repositories)
+  Stream<PrintOrder> watchOrder(String orderId) => subscribeToOrder(orderId);
 
   // ============================================
   // Credit Operations
