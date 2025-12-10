@@ -1,0 +1,75 @@
+# PrintHub Community - Supabase Configuration
+# See: https://supabase.com/docs/guides/cli/config
+
+[project]
+id = "printhub-community"
+name = "PrintHub Community"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+
+[auth.sms.twilio]
+enabled = false
+# account_sid = ""
+# message_service_sid = ""
+# auth_token = ""
+
+[storage]
+enabled = false # We don't use storage - documents stay on device
+
+[functions]
+enabled = true
+
+[functions.paytm-webhook]
+enabled = true
+verify_jwt = false # Paytm webhooks don't have JWT
+
+[functions.epson-status]
+enabled = true
+verify_jwt = true
+
+[analytics]
+enabled = false
+
+# Environment variables for functions
+# These should be set in Supabase Dashboard > Project Settings > Edge Functions
+# PAYTM_MERCHANT_ID - Paytm Merchant ID
+# PAYTM_MERCHANT_KEY - Paytm Merchant Key
+# EPSON_CLIENT_ID - Epson Connect Client ID
+# EPSON_CLIENT_SECRET - Epson Connect Client Secret
+# EPSON_ACCESS_TOKEN - Epson Connect Access Token
