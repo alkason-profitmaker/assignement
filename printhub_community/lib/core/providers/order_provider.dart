@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
@@ -192,7 +191,7 @@ class OrderNotifier extends StateNotifier<OrderState> {
     if (state.selectedStation == null) return false;
 
     try {
-      final printerEmail = state.selectedStation!.printerEmail;
+      final printerEmail = state.selectedStation!.epsonPrinterEmail;
       final printerResult = await _epsonService.checkPrinterReady(printerEmail);
 
       if (!printerResult.isReady) {
