@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "PrintHub",
+    "slug": "printhub",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2196F3"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.printhub.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PrintHub needs camera access to scan QR codes at the printer station.",
+        "NSPhotoLibraryUsageDescription": "PrintHub needs photo library access to select images for printing."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#2196F3"
+      },
+      "package": "com.printhub.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PrintHub to access your camera for QR scanning."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow PrintHub to access your photos for printing."
+        }
+      ]
+    ]
+  }
+}
