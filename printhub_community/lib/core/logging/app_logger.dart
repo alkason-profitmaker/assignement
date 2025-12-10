@@ -167,7 +167,8 @@ class AppLogger {
     StackTrace? stackTrace, {
     String? message,
   }) {
-    // Placeholder for Crashlytics/Sentry integration
+    // Crash reporting integration point - enable when Firebase is configured
+    // To enable: Add firebase_crashlytics dependency and uncomment:
     // FirebaseCrashlytics.instance.recordError(error, stackTrace, reason: message);
   }
 }
