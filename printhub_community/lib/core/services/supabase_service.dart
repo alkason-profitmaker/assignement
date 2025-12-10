@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/supabase_constants.dart';
 import '../models/models.dart';
@@ -303,10 +304,11 @@ class SupabaseService {
     required List<int> bytes,
   }) async {
     final path = 'orders/$orderId/$fileName';
+    final uint8Bytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
 
     await _client.storage
         .from(SupabaseConstants.documentsBucket)
-        .uploadBinary(path, bytes as dynamic);
+        .uploadBinary(path, uint8Bytes);
 
     return path;
   }
