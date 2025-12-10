@@ -420,26 +420,17 @@ class SupabaseService {
     return CreditSummary.fromCredits(credits);
   }
 
-  /// Apply credits to an order and return amount saved
+  /// Apply credits to an order and return amount saved in paise
   Future<int> applyCreditsToOrder(String orderId, int maxAmountPaise) async {
     final userId = currentUserId;
     if (userId == null) return 0;
 
-    final credits = await getUserCredits();
-    if (credits.isEmpty) return 0;
+    final summary = await getCreditSummary(userId);
+    if (!summary.hasCredits) return 0;
 
-    // Calculate how much credit can be applied
-    int totalAvailable = 0;
-    for (final credit in credits) {
-      totalAvailable += credit.remainingPaise;
-    }
-
-    final toApply = totalAvailable < maxAmountPaise ? totalAvailable : maxAmountPaise;
-
-    if (toApply > 0) {
-      // Update order with credits applied
-      await updateOrder(orderId: orderId);
-    }
+    final toApply = summary.valueInPaise < maxAmountPaise
+        ? summary.valueInPaise
+        : maxAmountPaise;
 
     return toApply;
   }
