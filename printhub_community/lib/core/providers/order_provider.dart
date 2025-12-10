@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
+import '../logging/app_logger.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import 'service_providers.dart';
@@ -95,10 +97,19 @@ enum OrderStep {
 class OrderNotifier extends StateNotifier<OrderState> {
   final SupabaseService _supabaseService;
   final DocumentService _documentService;
+  final NetworkService _networkService;
+  final EpsonService _epsonService;
+  final PaymentCallbackService _paymentCallbackService;
   final Ref _ref;
 
-  OrderNotifier(this._supabaseService, this._documentService, this._ref)
-      : super(OrderState());
+  OrderNotifier(
+    this._supabaseService,
+    this._documentService,
+    this._networkService,
+    this._epsonService,
+    this._paymentCallbackService,
+    this._ref,
+  ) : super(OrderState());
 
   /// Reset order state
   void resetOrder() {
@@ -163,7 +174,51 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  /// Create order
+  /// Check network connectivity before operations
+  Future<bool> _validateNetwork() async {
+    final networkResult = await _networkService.validateNetworkForOperation();
+    if (!networkResult.canProceed) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: networkResult.errorMessage,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /// Check printer status before creating order
+  Future<bool> _validatePrinterStatus() async {
+    if (state.selectedStation == null) return false;
+
+    try {
+      final printerEmail = state.selectedStation!.printerEmail;
+      final printerResult = await _epsonService.checkPrinterReady(printerEmail);
+
+      if (!printerResult.isReady) {
+        AppLogger.warning(
+          'Printer not ready: ${printerResult.errorMessage}',
+          tag: 'Order',
+        );
+        state = state.copyWith(
+          isLoading: false,
+          errorMessage: printerResult.errorMessage ?? 'Printer is not ready',
+        );
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      AppLogger.error('Printer status check failed', error: e, tag: 'Order');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Unable to verify printer status. Please try again.',
+      );
+      return false;
+    }
+  }
+
+  /// Create order with network and printer validation
   Future<bool> createOrder() async {
     if (!state.canCreateOrder) return false;
 
@@ -172,6 +227,12 @@ class OrderNotifier extends StateNotifier<OrderState> {
     if (user == null || society == null) return false;
 
     state = state.copyWith(isLoading: true, errorMessage: null);
+
+    // Validate network connectivity
+    if (!await _validateNetwork()) return false;
+
+    // Validate printer status
+    if (!await _validatePrinterStatus()) return false;
 
     try {
       final order = await _supabaseService.createOrder(
@@ -189,13 +250,19 @@ class OrderNotifier extends StateNotifier<OrderState> {
         finalAmountPaise: state.finalAmountPaise,
       );
 
+      // Start payment monitoring
+      _paymentCallbackService.startPaymentMonitoring(order.id);
+
       state = state.copyWith(
         currentOrder: order,
         currentStep: OrderStep.payment,
         isLoading: false,
       );
+
+      AppLogger.info('Order created: ${order.id}', tag: 'Order');
       return true;
     } catch (e) {
+      AppLogger.error('Failed to create order', error: e, tag: 'Order');
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Failed to create order: ${e.toString()}',
@@ -221,17 +288,88 @@ class OrderNotifier extends StateNotifier<OrderState> {
   }
 
   /// Cancel current order
-  Future<void> cancelOrder() async {
-    // In a real implementation, mark order as cancelled in database
-    resetOrder();
+  Future<bool> cancelOrder() async {
+    if (state.currentOrder == null) {
+      resetOrder();
+      return true;
+    }
+
+    final orderId = state.currentOrder!.id;
+    state = state.copyWith(isLoading: true, errorMessage: null);
+
+    try {
+      // Stop payment monitoring
+      _paymentCallbackService.stopPaymentMonitoring();
+
+      // Update order status in database
+      await Supabase.instance.client.from('orders').update({
+        'status': 'cancelled',
+        'cancelled_at': DateTime.now().toIso8601String(),
+        'cancelled_reason': 'User cancelled',
+      }).eq('id', orderId);
+
+      AppLogger.info('Order cancelled: $orderId', tag: 'Order');
+
+      resetOrder();
+      return true;
+    } catch (e) {
+      AppLogger.error('Failed to cancel order', error: e, tag: 'Order');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Failed to cancel order: ${e.toString()}',
+      );
+      return false;
+    }
+  }
+
+  /// Handle payment success
+  void onPaymentSuccess(String txnId) {
+    if (state.currentOrder == null) return;
+
+    state = state.copyWith(currentStep: OrderStep.printing);
+    AppLogger.info('Payment successful, starting print: ${state.currentOrder!.id}', tag: 'Order');
+  }
+
+  /// Handle payment failure
+  void onPaymentFailed(String? errorMessage) {
+    state = state.copyWith(
+      currentStep: OrderStep.failed,
+      errorMessage: errorMessage ?? 'Payment failed',
+    );
+  }
+
+  @override
+  void dispose() {
+    _paymentCallbackService.stopPaymentMonitoring();
+    super.dispose();
   }
 }
+
+/// Payment callback service provider
+final paymentCallbackServiceProvider = Provider<PaymentCallbackService>((ref) {
+  final paytmService = ref.watch(paytmServiceProvider);
+  return PaymentCallbackService(
+    paytmService: paytmService,
+    supabase: Supabase.instance.client,
+  );
+});
 
 /// Order provider
 final orderProvider = StateNotifierProvider<OrderNotifier, OrderState>((ref) {
   final supabaseService = ref.watch(supabaseServiceProvider);
   final documentService = ref.watch(documentServiceProvider);
-  return OrderNotifier(supabaseService, documentService, ref);
+  final networkService = ref.watch(networkServiceProvider);
+  final epsonService = ref.watch(epsonServiceProvider);
+  final paymentCallbackService = ref.watch(paymentCallbackServiceProvider);
+
+  return OrderNotifier(
+    supabaseService,
+    documentService,
+    networkService,
+    epsonService,
+    paymentCallbackService,
+    ref,
+  );
 });
 
 /// Order history provider

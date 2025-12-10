@@ -20,6 +20,7 @@ dependencies:
   # HTTP & Networking
   http: ^1.2.0
   dio: ^5.4.0
+  connectivity_plus: ^6.0.0
 
   # PDF Processing
   pdf: ^3.11.0
