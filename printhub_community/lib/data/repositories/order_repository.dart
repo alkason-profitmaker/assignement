@@ -28,7 +28,7 @@ abstract class OrderRepository {
   Future<Either<Failure, PaymentQrData>> generatePaymentQr(String orderId);
 
   /// Check payment status
-  Future<Either<Failure, PaymentStatus>> checkPaymentStatus(String orderId);
+  Future<Either<Failure, PaymentCheckResult>> checkPaymentStatus(String orderId);
 
   /// Request refund for order
   Future<Either<Failure, void>> requestRefund(String orderId, String reason);
@@ -55,8 +55,8 @@ class PaymentQrData {
   });
 }
 
-/// Payment status enum
-enum PaymentStatus {
+/// Payment check result enum (distinct from model PaymentStatus)
+enum PaymentCheckResult {
   pending,
   processing,
   success,
@@ -243,7 +243,7 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Either<Failure, PaymentStatus>> checkPaymentStatus(String orderId) async {
+  Future<Either<Failure, PaymentCheckResult>> checkPaymentStatus(String orderId) async {
     try {
       final order = await _supabaseService.getOrderById(orderId);
       if (order == null) {
@@ -255,17 +255,17 @@ class OrderRepositoryImpl implements OrderRepository {
 
       switch (order.paymentStatus) {
         case 'PENDING':
-          return const Right(PaymentStatus.pending);
+          return const Right(PaymentCheckResult.pending);
         case 'PROCESSING':
-          return const Right(PaymentStatus.processing);
+          return const Right(PaymentCheckResult.processing);
         case 'PAID':
-          return const Right(PaymentStatus.success);
+          return const Right(PaymentCheckResult.success);
         case 'FAILED':
-          return const Right(PaymentStatus.failed);
+          return const Right(PaymentCheckResult.failed);
         case 'REFUNDED':
-          return const Right(PaymentStatus.refunded);
+          return const Right(PaymentCheckResult.refunded);
         default:
-          return const Right(PaymentStatus.pending);
+          return const Right(PaymentCheckResult.pending);
       }
     } catch (e) {
       return Left(ServerFailure(

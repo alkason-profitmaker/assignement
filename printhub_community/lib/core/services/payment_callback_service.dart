@@ -72,7 +72,7 @@ class PaymentCallbackService {
 
         _statusController?.add(PaymentStatusUpdate(
           orderId: orderId,
-          status: PaymentStatus.success,
+          status: PaymentCallbackStatus.success,
           txnId: status.txnId,
           message: 'Payment successful',
         ));
@@ -82,7 +82,7 @@ class PaymentCallbackService {
 
         _statusController?.add(PaymentStatusUpdate(
           orderId: orderId,
-          status: PaymentStatus.failed,
+          status: PaymentCallbackStatus.failed,
           message: status.resultMessage ?? 'Payment failed',
           errorCode: status.resultCode,
         ));
@@ -110,7 +110,7 @@ class PaymentCallbackService {
         _stopPolling();
         _statusController?.add(PaymentStatusUpdate(
           orderId: orderId,
-          status: PaymentStatus.success,
+          status: PaymentCallbackStatus.success,
           txnId: orderData['payment_txn_id'] as String?,
           message: 'Payment confirmed',
         ));
@@ -168,7 +168,7 @@ class PaymentCallbackService {
         // Notify listeners
         _statusController?.add(PaymentStatusUpdate(
           orderId: webhookData.orderId,
-          status: PaymentStatus.success,
+          status: PaymentCallbackStatus.success,
           txnId: webhookData.txnId,
           message: 'Payment successful via webhook',
         ));
@@ -183,7 +183,7 @@ class PaymentCallbackService {
 
         _statusController?.add(PaymentStatusUpdate(
           orderId: webhookData.orderId,
-          status: PaymentStatus.failed,
+          status: PaymentCallbackStatus.failed,
           message: 'Payment failed',
         ));
 
@@ -227,7 +227,7 @@ class PaymentCallbackService {
 /// Payment status update event
 class PaymentStatusUpdate {
   final String orderId;
-  final PaymentStatus status;
+  final PaymentCallbackStatus status;
   final String? txnId;
   final String? message;
   final String? errorCode;
@@ -241,8 +241,8 @@ class PaymentStatusUpdate {
   });
 }
 
-/// Payment status enum
-enum PaymentStatus {
+/// Payment callback status enum (distinct from model PaymentStatus)
+enum PaymentCallbackStatus {
   pending,
   success,
   failed,
