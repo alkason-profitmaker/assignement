@@ -221,11 +221,11 @@ async function getDocumentFromStorage(
   orderId: string
 ): Promise<Uint8Array | null> {
   try {
-    // Documents are stored as: documents/{orderId}/document.pdf
+    // Documents are stored as: documents/orders/{orderId}/document.pdf
     const { data, error } = await supabaseClient
       .storage
       .from('documents')
-      .download(`${orderId}/document.pdf`)
+      .download(`orders/${orderId}/document.pdf`)
 
     if (error) {
       console.error('Storage download error:', error)

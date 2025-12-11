@@ -295,6 +295,16 @@ class OrderNotifier extends StateNotifier<OrderState> {
         finalAmountPaise: state.finalAmountPaise,
       );
 
+      // Upload document to storage for printing after payment
+      AppLogger.info('Uploading document for order: ${order.id}', tag: 'Order');
+      final printBytes = await _documentService.prepareForPrinting(state.selectedDocument!);
+      await _supabaseService.uploadDocument(
+        orderId: order.id,
+        fileName: 'document.pdf',
+        bytes: printBytes,
+      );
+      AppLogger.info('Document uploaded successfully', tag: 'Order');
+
       // Start payment monitoring
       _paymentCallbackService.startPaymentMonitoring(order.id);
 
