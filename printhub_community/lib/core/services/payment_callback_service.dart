@@ -111,7 +111,7 @@ class PaymentCallbackService {
         _statusController?.add(PaymentStatusUpdate(
           orderId: orderId,
           status: PaymentCallbackStatus.success,
-          txnId: orderData['payment_txn_id'] as String?,
+          txnId: orderData['paytm_txn_id'] as String?,
           message: 'Payment confirmed',
         ));
       }
@@ -122,15 +122,12 @@ class PaymentCallbackService {
   Future<void> _updateOrderPaymentStatus({
     required String orderId,
     required String txnId,
-    required double amount,
-    required String paymentMode,
   }) async {
     try {
       await _supabase.from('orders').update({
-        'payment_status': 'paid',
-        'payment_txn_id': txnId,
+        'payment_status': 'PAID',
+        'paytm_txn_id': txnId,
         'paid_at': DateTime.now().toIso8601String(),
-        'payment_mode': paymentMode,
       }).eq('id', orderId);
 
       AppLogger.info('Order payment status updated: $orderId', tag: 'Payment');
@@ -161,8 +158,6 @@ class PaymentCallbackService {
         await _updateOrderPaymentStatus(
           orderId: webhookData.orderId,
           txnId: webhookData.txnId,
-          amount: webhookData.amount,
-          paymentMode: webhookData.paymentMode,
         );
 
         // Notify listeners
@@ -175,12 +170,8 @@ class PaymentCallbackService {
 
         return WebhookProcessResult.success(webhookData.orderId);
       } else {
-        // Update order as failed
-        await _supabase.from('orders').update({
-          'payment_status': 'failed',
-          'failed_reason': 'Payment declined',
-        }).eq('id', webhookData.orderId);
-
+        // Payment failed - order remains PENDING, will expire naturally
+        // No need to update DB - just notify listeners
         _statusController?.add(PaymentStatusUpdate(
           orderId: webhookData.orderId,
           status: PaymentCallbackStatus.failed,
@@ -204,8 +195,6 @@ class PaymentCallbackService {
         await _updateOrderPaymentStatus(
           orderId: orderId,
           txnId: status.txnId ?? '',
-          amount: status.amount ?? 0,
-          paymentMode: status.paymentMode ?? 'UPI',
         );
         return true;
       }
