@@ -32,16 +32,15 @@ void main() {
       id: 'station-123',
       societyId: 'society-456',
       name: 'Test Station',
-      location: 'Lobby',
-      isActive: true,
-      isOnline: true,
+      locationDescription: 'Lobby',
       epsonPrinterEmail: 'printer@epson.connect',
+      isActive: true,
       createdAt: DateTime.now(),
     );
 
     final testOrder = PrintOrder(
       id: 'order-789',
-      oderId: 'ORD-789',
+      orderNumber: 789,
       userId: 'user-123',
       societyId: 'society-456',
       stationId: 'station-123',
@@ -52,9 +51,10 @@ void main() {
       copies: 1,
       amountPaise: 2200,
       finalAmountPaise: 2200,
-      status: 'pending',
-      paymentStatus: 'pending',
+      printStatus: 'WAITING',
+      paymentStatus: 'PENDING',
       createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
       expiresAt: DateTime.now().add(const Duration(hours: 2)),
     );
 
@@ -199,7 +199,7 @@ void main() {
     test('returns order when found', () async {
       final testOrder = PrintOrder(
         id: 'order-123',
-        oderId: 'ORD-123',
+        orderNumber: 123,
         userId: 'user-123',
         societyId: 'society-456',
         stationId: 'station-789',
@@ -210,9 +210,10 @@ void main() {
         copies: 1,
         amountPaise: 2200,
         finalAmountPaise: 2200,
-        status: 'pending',
-        paymentStatus: 'pending',
+        printStatus: 'WAITING',
+        paymentStatus: 'PENDING',
         createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
         expiresAt: DateTime.now().add(const Duration(hours: 2)),
       );
 

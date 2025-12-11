@@ -54,7 +54,7 @@ void main() {
       test('parses valid JSON correctly', () {
         final json = {
           'id': 'order-123',
-          'order_id': 'ORD-123',
+          'order_number': 123,
           'user_id': 'user-456',
           'society_id': 'society-789',
           'station_id': 'station-101',
@@ -65,15 +65,17 @@ void main() {
           'copies': 1,
           'amount_paise': 4400,
           'final_amount_paise': 4400,
-          'status': 'pending',
-          'payment_status': 'pending',
+          'print_status': 'WAITING',
+          'payment_status': 'PENDING',
           'created_at': '2024-01-15T10:30:00Z',
+          'updated_at': '2024-01-15T10:30:00Z',
           'expires_at': '2024-01-15T12:30:00Z',
         };
 
         final order = PrintOrder.fromJson(json);
 
         expect(order.id, 'order-123');
+        expect(order.orderNumber, 123);
         expect(order.fileName, 'document.pdf');
         expect(order.totalPages, 10);
         expect(order.bwPages, 8);

@@ -66,17 +66,15 @@ class TestData {
     String id = 'test-station-id',
     String societyId = 'test-society-id',
     String name = 'Lobby Printer',
-    String location = 'Ground Floor Lobby',
+    String? locationDescription = 'Ground Floor Lobby',
     bool isActive = true,
-    bool isOnline = true,
   }) {
     return Station(
       id: id,
       societyId: societyId,
       name: name,
-      location: location,
+      locationDescription: locationDescription,
       isActive: isActive,
-      isOnline: isOnline,
       epsonPrinterEmail: 'printer@epson.connect',
       createdAt: DateTime.now(),
     );
@@ -84,6 +82,7 @@ class TestData {
 
   static PrintOrder createOrder({
     String id = 'test-order-id',
+    int orderNumber = 1,
     String userId = 'test-user-id',
     String societyId = 'test-society-id',
     String stationId = 'test-station-id',
@@ -92,12 +91,13 @@ class TestData {
     int bwPages = 4,
     int colorPages = 1,
     int copies = 1,
-    String status = 'pending',
-    String paymentStatus = 'pending',
+    String printStatus = 'WAITING',
+    String paymentStatus = 'PENDING',
   }) {
+    final now = DateTime.now();
     return PrintOrder(
       id: id,
-      oderId: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
+      orderNumber: orderNumber,
       userId: userId,
       societyId: societyId,
       stationId: stationId,
@@ -108,10 +108,11 @@ class TestData {
       copies: copies,
       amountPaise: (bwPages * 300 + colorPages * 1000) * copies,
       finalAmountPaise: (bwPages * 300 + colorPages * 1000) * copies,
-      status: status,
+      printStatus: printStatus,
       paymentStatus: paymentStatus,
-      createdAt: DateTime.now(),
-      expiresAt: DateTime.now().add(const Duration(hours: 2)),
+      createdAt: now,
+      updatedAt: now,
+      expiresAt: now.add(const Duration(hours: 2)),
     );
   }
 
