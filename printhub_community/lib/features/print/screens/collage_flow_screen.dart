@@ -190,7 +190,7 @@ class _CollageFlowScreenState extends ConsumerState<CollageFlowScreen> {
                   ),
                 ),
               ),
-              if (_selectedPhotos.isNotEmpty) ...[
+              if (_selectedPhotos.length >= 2) ...[
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
@@ -204,6 +204,23 @@ class _CollageFlowScreenState extends ConsumerState<CollageFlowScreen> {
                       ),
                     ),
                     child: Text('Next (${_selectedPhotos.length} photos)'),
+                  ),
+                ),
+              ] else if (_selectedPhotos.isNotEmpty) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'Select at least 2 photos',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
                   ),
                 ),
               ],
