@@ -48,17 +48,19 @@ class TestData {
     String address = '123 Test Street',
     String city = 'Mumbai',
     String pincode = '400001',
+    String paytmMid = 'TEST_MID_123',
   }) {
+    final now = DateTime.now();
     return Society(
       id: id,
       name: name,
       address: address,
       city: city,
       pincode: pincode,
+      paytmMid: paytmMid,
       isActive: true,
-      bwPricePerPage: 300,
-      colorPricePerPage: 1000,
-      createdAt: DateTime.now(),
+      createdAt: now,
+      updatedAt: now,
     );
   }
 
