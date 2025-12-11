@@ -106,7 +106,7 @@ class PaymentCallbackService {
       final orderData = data.first;
       final paymentStatus = orderData['payment_status'] as String?;
 
-      if (paymentStatus == 'paid') {
+      if (paymentStatus?.toUpperCase() == 'PAID') {
         _stopPolling();
         _statusController?.add(PaymentStatusUpdate(
           orderId: orderId,

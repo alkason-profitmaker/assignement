@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/app_constants.dart';
@@ -122,6 +123,7 @@ class OrderNotifier extends StateNotifier<OrderState> {
   final EpsonService _epsonService;
   final PaymentCallbackService _paymentCallbackService;
   final Ref _ref;
+  StreamSubscription<PaymentStatusUpdate>? _paymentStatusSubscription;
 
   OrderNotifier(
     this._supabaseService,
@@ -130,7 +132,24 @@ class OrderNotifier extends StateNotifier<OrderState> {
     this._epsonService,
     this._paymentCallbackService,
     this._ref,
-  ) : super(OrderState());
+  ) : super(OrderState()) {
+    // Subscribe to payment status updates for direct device-to-printer transmission
+    _paymentStatusSubscription = _paymentCallbackService.statusUpdates.listen(
+      _handlePaymentStatusUpdate,
+    );
+  }
+
+  /// Handle payment status updates from the payment callback service
+  void _handlePaymentStatusUpdate(PaymentStatusUpdate update) {
+    if (state.currentOrder?.id != update.orderId) return;
+
+    if (update.status == PaymentCallbackStatus.success) {
+      AppLogger.info('Payment confirmed via callback, initiating print', tag: 'Order');
+      onPaymentSuccess(update.txnId ?? '');
+    } else if (update.status == PaymentCallbackStatus.failed) {
+      onPaymentFailed(update.message);
+    }
+  }
 
   /// Reset order state
   void resetOrder() {
@@ -295,15 +314,8 @@ class OrderNotifier extends StateNotifier<OrderState> {
         finalAmountPaise: state.finalAmountPaise,
       );
 
-      // Upload document to storage for printing after payment
-      AppLogger.info('Uploading document for order: ${order.id}', tag: 'Order');
-      final printBytes = await _documentService.prepareForPrinting(state.selectedDocument!);
-      await _supabaseService.uploadDocument(
-        orderId: order.id,
-        fileName: 'document.pdf',
-        bytes: printBytes,
-      );
-      AppLogger.info('Document uploaded successfully', tag: 'Order');
+      // PRIVACY: Document stays on device - NOT uploaded to server
+      // Document will be sent directly to printer after payment confirmation
 
       // Start payment monitoring
       _paymentCallbackService.startPaymentMonitoring(order.id);
@@ -377,12 +389,56 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  /// Handle payment success
-  void onPaymentSuccess(String txnId) {
-    if (state.currentOrder == null) return;
+  /// Handle payment success - sends document directly to printer
+  Future<void> onPaymentSuccess(String txnId) async {
+    if (state.currentOrder == null || state.selectedDocument == null) return;
+    if (state.selectedStation == null) return;
 
     state = state.copyWith(currentStep: OrderStep.printing);
-    AppLogger.info('Payment successful, starting print: ${state.currentOrder!.id}', tag: 'Order');
+    AppLogger.info('Payment successful, sending document to printer: ${state.currentOrder!.id}', tag: 'Order');
+
+    try {
+      // PRIVACY: Document is sent directly from device to printer
+      // No server storage - direct device-to-printer transmission
+      final printBytes = await _documentService.prepareForPrinting(state.selectedDocument!);
+
+      final printerEmail = state.selectedStation!.epsonPrinterEmail;
+      final printResult = await _epsonService.submitPrintJob(
+        printerEmail: printerEmail,
+        documentBytes: printBytes,
+        fileName: state.selectedDocument!.name,
+        copies: state.copies,
+        colorMode: state.selectedDocument!.colorPageCount > 0 ? 'color' : 'mono',
+      );
+
+      if (printResult.success) {
+        AppLogger.info('Print job submitted: ${printResult.jobId}', tag: 'Order');
+
+        // Update order with print job ID
+        await Supabase.instance.client.from('orders').update({
+          'epson_job_id': printResult.jobId,
+          'print_status': 'printing',
+        }).eq('id', state.currentOrder!.id);
+      } else {
+        AppLogger.error('Print job failed: ${printResult.errorMessage}', tag: 'Order');
+        state = state.copyWith(
+          currentStep: OrderStep.failed,
+          errorMessage: printResult.errorMessage ?? 'Failed to send to printer',
+        );
+
+        // Update order status to failed
+        await Supabase.instance.client.from('orders').update({
+          'print_status': 'failed',
+          'error_message': printResult.errorMessage,
+        }).eq('id', state.currentOrder!.id);
+      }
+    } catch (e) {
+      AppLogger.error('Failed to submit print job', error: e, tag: 'Order');
+      state = state.copyWith(
+        currentStep: OrderStep.failed,
+        errorMessage: 'Failed to send document to printer: ${e.toString()}',
+      );
+    }
   }
 
   /// Handle payment failure
@@ -395,6 +451,7 @@ class OrderNotifier extends StateNotifier<OrderState> {
 
   @override
   void dispose() {
+    _paymentStatusSubscription?.cancel();
     _paymentCallbackService.stopPaymentMonitoring();
     super.dispose();
   }

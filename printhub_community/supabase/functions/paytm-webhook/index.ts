@@ -23,17 +23,7 @@ interface PaytmWebhookPayload {
   MID: string
 }
 
-interface EpsonPrintSettings {
-  media_size: string
-  media_type: string
-  color_mode: string
-  copies: number
-  print_quality: string
-  borderless: boolean
-  two_sided: string
-  source: string
-  collate: boolean
-}
+// NOTE: EpsonPrintSettings removed - printing handled by mobile app
 
 serve(async (req: Request) => {
   // Handle CORS preflight
@@ -116,13 +106,16 @@ serve(async (req: Request) => {
     }
 
     // Update order as paid
+    // PRIVACY: Document is NOT stored on server
+    // The mobile app will detect this status change via Supabase realtime
+    // and send the document directly from device to Epson printer
     const { error: updateError } = await supabaseClient
       .from('orders')
       .update({
         payment_status: 'PAID',
         paytm_txn_id: payload.TXNID,
         paid_at: new Date().toISOString(),
-        print_status: 'QUEUED',
+        print_status: 'AWAITING_DEVICE', // App will send document to printer
         updated_at: new Date().toISOString()
       })
       .eq('id', order.id)
@@ -132,76 +125,14 @@ serve(async (req: Request) => {
       throw updateError
     }
 
-    // Get document from storage
-    const documentBytes = await getDocumentFromStorage(supabaseClient, order.id)
-    if (!documentBytes) {
-      console.error('Document not found for order:', order.id)
-      await initiateAutoRefund(supabaseClient, order, 'DOCUMENT_NOT_FOUND')
-      return new Response(
-        JSON.stringify({ success: false, message: 'Document not found, refund initiated' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Check printer status
-    const printerStatus = await checkPrinterStatus(order.stations.epson_printer_email)
-
-    if (!printerStatus.isOnline) {
-      console.log('Printer offline, initiating refund')
-      await initiateAutoRefund(supabaseClient, order, 'PRINTER_OFFLINE')
-      return new Response(
-        JSON.stringify({ success: false, message: 'Printer offline, refund initiated' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Submit print job to Epson Connect with document upload
-    const printResult = await submitPrintJobWithDocument({
-      printerEmail: order.stations.epson_printer_email,
-      orderId: order.id,
-      fileName: order.file_name,
-      documentBytes: documentBytes,
-      copies: order.copies,
-      hasColor: order.color_pages > 0
-    })
-
-    if (!printResult.success) {
-      console.log('Print job submission failed:', printResult.error)
-      await initiateAutoRefund(supabaseClient, order, printResult.errorCode || 'PRINT_FAILED')
-      return new Response(
-        JSON.stringify({ success: false, message: 'Print failed, refund initiated' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Update order with print job ID
-    await supabaseClient
-      .from('orders')
-      .update({
-        epson_job_id: printResult.jobId,
-        print_status: 'PRINTING',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', order.id)
-
-    // Schedule print status check (via separate scheduled function)
-    await supabaseClient
-      .from('print_job_queue')
-      .insert({
-        order_id: order.id,
-        epson_job_id: printResult.jobId,
-        printer_email: order.stations.epson_printer_email,
-        check_count: 0,
-        next_check_at: new Date(Date.now() + 30000).toISOString() // Check in 30 seconds
-      })
-
-    console.log('Print job submitted successfully:', printResult.jobId)
+    console.log('Payment confirmed for order:', order.id)
+    console.log('Awaiting mobile app to send document directly to printer')
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Payment processed and print job submitted',
-        jobId: printResult.jobId
+        message: 'Payment confirmed. Device will send document to printer.',
+        orderId: order.id
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
@@ -215,30 +146,9 @@ serve(async (req: Request) => {
   }
 })
 
-// Get document from Supabase Storage
-async function getDocumentFromStorage(
-  supabaseClient: any,
-  orderId: string
-): Promise<Uint8Array | null> {
-  try {
-    // Documents are stored as: documents/orders/{orderId}/document.pdf
-    const { data, error } = await supabaseClient
-      .storage
-      .from('documents')
-      .download(`orders/${orderId}/document.pdf`)
-
-    if (error) {
-      console.error('Storage download error:', error)
-      return null
-    }
-
-    const arrayBuffer = await data.arrayBuffer()
-    return new Uint8Array(arrayBuffer)
-  } catch (error) {
-    console.error('Document retrieval error:', error)
-    return null
-  }
-}
+// NOTE: Document storage functions removed for privacy compliance
+// Documents are NEVER stored on the server
+// Mobile app sends documents directly to Epson printer after payment confirmation
 
 // Verify Paytm webhook signature
 async function verifyPaytmSignature(payload: PaytmWebhookPayload): Promise<boolean> {
@@ -275,226 +185,12 @@ async function verifyPaytmSignature(payload: PaytmWebhookPayload): Promise<boole
   }
 }
 
-// Check Epson printer status
-async function checkPrinterStatus(printerEmail: string): Promise<{ isOnline: boolean; error?: string }> {
-  try {
-    const accessToken = await getEpsonAccessToken()
-    if (!accessToken) {
-      console.warn('No Epson access token')
-      return { isOnline: true } // Assume online for development
-    }
+// NOTE: Epson printer functions removed - all Epson communication handled by mobile app
+// This keeps documents on-device (privacy) and reduces server-side complexity
 
-    const deviceId = printerEmail.split('@')[0]
-    const response = await fetch(
-      `https://api.epsonconnect.com/api/1/printing/printers/${deviceId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-
-    if (!response.ok) {
-      return { isOnline: false, error: 'Failed to get printer status' }
-    }
-
-    const data = await response.json()
-    return {
-      isOnline: data.connection === 'online',
-      error: data.error_code
-    }
-  } catch (error) {
-    console.error('Printer status check error:', error)
-    return { isOnline: false, error: error.message }
-  }
-}
-
-// Get Epson Connect OAuth access token
-async function getEpsonAccessToken(): Promise<string | null> {
-  try {
-    const clientId = Deno.env.get('EPSON_CLIENT_ID')
-    const clientSecret = Deno.env.get('EPSON_CLIENT_SECRET')
-    const refreshToken = Deno.env.get('EPSON_REFRESH_TOKEN')
-
-    if (!clientId || !clientSecret || !refreshToken) {
-      return null
-    }
-
-    const response = await fetch('https://api.epsonconnect.com/api/1/printing/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken
-      })
-    })
-
-    if (!response.ok) {
-      console.error('Failed to get Epson token')
-      return null
-    }
-
-    const data = await response.json()
-    return data.access_token
-  } catch (error) {
-    console.error('Epson token error:', error)
-    return null
-  }
-}
-
-// Submit print job to Epson Connect with document upload
-async function submitPrintJobWithDocument(params: {
-  printerEmail: string
-  orderId: string
-  fileName: string
-  documentBytes: Uint8Array
-  copies: number
-  hasColor: boolean
-}): Promise<{ success: boolean; jobId?: string; error?: string; errorCode?: string }> {
-  try {
-    const accessToken = await getEpsonAccessToken()
-    if (!accessToken) {
-      console.warn('EPSON access token not available, simulating success')
-      return { success: true, jobId: `SIM_${Date.now()}` }
-    }
-
-    const deviceId = params.printerEmail.split('@')[0]
-
-    // Step 1: Create print job
-    console.log('Creating Epson print job...')
-    const createResponse = await fetch(
-      `https://api.epsonconnect.com/api/1/printing/printers/${deviceId}/jobs`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          job_name: `PrintHub_${params.orderId}`,
-          print_mode: 'document',
-          print_setting: {
-            media_size: 'ms_a4',
-            media_type: 'mt_plainpaper',
-            borderless: false,
-            color_mode: params.hasColor ? 'color' : 'mono',
-            two_sided: 'none',
-            reverse_order: false,
-            copies: params.copies,
-            collate: true,
-            print_quality: 'normal'
-          } as EpsonPrintSettings
-        })
-      }
-    )
-
-    if (!createResponse.ok) {
-      const errorData = await createResponse.json()
-      console.error('Failed to create print job:', errorData)
-      return {
-        success: false,
-        error: errorData.message || 'Failed to create print job',
-        errorCode: errorData.code || 'EPSON_CREATE_ERROR'
-      }
-    }
-
-    const jobData = await createResponse.json()
-    const jobId = jobData.id
-    const uploadUri = jobData.upload_uri
-
-    console.log('Print job created:', jobId, 'Upload URI:', uploadUri)
-
-    // Step 2: Upload document to the provided upload URI
-    console.log('Uploading document...')
-    const fileExtension = params.fileName.toLowerCase().endsWith('.pdf') ? 'pdf' :
-                          params.fileName.toLowerCase().endsWith('.jpg') ||
-                          params.fileName.toLowerCase().endsWith('.jpeg') ? 'jpeg' : 'pdf'
-
-    const uploadResponse = await fetch(`${uploadUri}&File=1.${fileExtension}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': `application/${fileExtension === 'pdf' ? 'pdf' : 'jpeg'}`,
-        'Content-Length': params.documentBytes.length.toString()
-      },
-      body: params.documentBytes
-    })
-
-    if (!uploadResponse.ok) {
-      const uploadError = await uploadResponse.text()
-      console.error('Document upload failed:', uploadError)
-
-      // Cancel the job since upload failed
-      await cancelEpsonJob(accessToken, deviceId, jobId)
-
-      return {
-        success: false,
-        error: 'Document upload failed',
-        errorCode: 'EPSON_UPLOAD_ERROR'
-      }
-    }
-
-    console.log('Document uploaded successfully')
-
-    // Step 3: Execute the print job
-    console.log('Executing print job...')
-    const executeResponse = await fetch(
-      `https://api.epsonconnect.com/api/1/printing/printers/${deviceId}/jobs/${jobId}/print`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-
-    if (!executeResponse.ok) {
-      const executeError = await executeResponse.json()
-      console.error('Job execution failed:', executeError)
-      return {
-        success: false,
-        error: executeError.message || 'Job execution failed',
-        errorCode: executeError.code || 'EPSON_EXECUTE_ERROR'
-      }
-    }
-
-    console.log('Print job executed successfully')
-
-    return {
-      success: true,
-      jobId: jobId
-    }
-  } catch (error) {
-    console.error('Print job submission error:', error)
-    return {
-      success: false,
-      error: error.message,
-      errorCode: 'SUBMISSION_ERROR'
-    }
-  }
-}
-
-// Cancel an Epson print job
-async function cancelEpsonJob(accessToken: string, deviceId: string, jobId: string): Promise<void> {
-  try {
-    await fetch(
-      `https://api.epsonconnect.com/api/1/printing/printers/${deviceId}/jobs/${jobId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      }
-    )
-  } catch (error) {
-    console.error('Failed to cancel job:', error)
-  }
-}
+// NOTE: Print job submission functions removed - printing is handled by mobile app
+// This webhook only confirms payment status
+// Mobile app detects payment via Supabase realtime and sends document directly to Epson
 
 // Initiate automatic refund for failed prints
 async function initiateAutoRefund(
