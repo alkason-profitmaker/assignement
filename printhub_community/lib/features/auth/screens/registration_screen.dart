@@ -47,6 +47,10 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
       final societies = await supabaseService.searchSocieties();
       setState(() {
         _societies = societies;
+        // Auto-select first available society as default
+        if (societies.isNotEmpty && _selectedSociety == null) {
+          _selectedSociety = societies.first;
+        }
         _isLoadingSocieties = false;
       });
     } catch (e) {
