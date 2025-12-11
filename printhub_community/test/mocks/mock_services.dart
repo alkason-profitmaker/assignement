@@ -49,6 +49,8 @@ class TestData {
     String city = 'Mumbai',
     String pincode = '400001',
     String paytmMid = 'TEST_MID_123',
+    int? bwPricePerPagePaise,
+    int? colorPricePerPagePaise,
   }) {
     final now = DateTime.now();
     return Society(
@@ -58,6 +60,8 @@ class TestData {
       city: city,
       pincode: pincode,
       paytmMid: paytmMid,
+      bwPricePerPagePaise: bwPricePerPagePaise ?? 300,
+      colorPricePerPagePaise: colorPricePerPagePaise ?? 1000,
       isActive: true,
       createdAt: now,
       updatedAt: now,

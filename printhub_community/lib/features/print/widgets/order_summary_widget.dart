@@ -138,7 +138,7 @@ class OrderSummaryWidget extends ConsumerWidget {
                               'B/W Pages (${document.bwPageCount} x ${orderState.copies})',
                           amount: document.bwPageCount *
                               orderState.copies *
-                              AppConstants.bwPricePerPagePaise,
+                              orderState.bwPricePerPagePaise,
                         ),
                         if (document.colorPageCount > 0)
                           _PriceRow(
@@ -146,7 +146,7 @@ class OrderSummaryWidget extends ConsumerWidget {
                                 'Color Pages (${document.colorPageCount} x ${orderState.copies})',
                             amount: document.colorPageCount *
                                 orderState.copies *
-                                AppConstants.colorPricePerPagePaise,
+                                orderState.colorPricePerPagePaise,
                           ),
                         if (orderState.creditsUsedPaise > 0) ...[
                           const Divider(),

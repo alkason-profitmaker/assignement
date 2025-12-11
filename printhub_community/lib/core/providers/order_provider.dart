@@ -12,6 +12,7 @@ import 'society_provider.dart';
 class OrderState {
   final PrintDocument? selectedDocument;
   final Station? selectedStation;
+  final Society? society;
   final int copies;
   final CreditSummary? creditSummary;
   final PrintOrder? currentOrder;
@@ -22,6 +23,7 @@ class OrderState {
   OrderState({
     this.selectedDocument,
     this.selectedStation,
+    this.society,
     this.copies = 1,
     this.creditSummary,
     this.currentOrder,
@@ -33,6 +35,7 @@ class OrderState {
   OrderState copyWith({
     PrintDocument? selectedDocument,
     Station? selectedStation,
+    Society? society,
     int? copies,
     CreditSummary? creditSummary,
     PrintOrder? currentOrder,
@@ -43,6 +46,7 @@ class OrderState {
     return OrderState(
       selectedDocument: selectedDocument ?? this.selectedDocument,
       selectedStation: selectedStation ?? this.selectedStation,
+      society: society ?? this.society,
       copies: copies ?? this.copies,
       creditSummary: creditSummary ?? this.creditSummary,
       currentOrder: currentOrder ?? this.currentOrder,
@@ -52,15 +56,30 @@ class OrderState {
     );
   }
 
-  /// Calculate order amount in paise
+  /// Get B/W price per page (from society or default)
+  int get bwPricePerPagePaise =>
+      society?.bwPricePerPagePaise ?? AppConstants.defaultBwPricePerPagePaise;
+
+  /// Get color price per page (from society or default)
+  int get colorPricePerPagePaise =>
+      society?.colorPricePerPagePaise ?? AppConstants.defaultColorPricePerPagePaise;
+
+  /// Calculate order amount in paise using society's pricing
   int get calculatedAmountPaise {
     if (selectedDocument == null) return 0;
 
-    return PrintOrder.calculatePrice(
-      bwPages: selectedDocument!.bwPageCount,
-      colorPages: selectedDocument!.colorPageCount,
-      copies: copies,
-    );
+    if (society != null) {
+      return society!.calculatePrice(
+        bwPages: selectedDocument!.bwPageCount,
+        colorPages: selectedDocument!.colorPageCount,
+        copies: copies,
+      );
+    }
+
+    // Fallback to default pricing
+    final bwTotal = selectedDocument!.bwPageCount * AppConstants.defaultBwPricePerPagePaise;
+    final colorTotal = selectedDocument!.colorPageCount * AppConstants.defaultColorPricePerPagePaise;
+    return (bwTotal + colorTotal) * copies;
   }
 
   /// Calculate amount after credits
@@ -68,8 +87,11 @@ class OrderState {
     final total = calculatedAmountPaise;
     if (creditSummary == null || !creditSummary!.hasCredits) return total;
 
-    // Calculate credit value (simplified - in real app, track pages used)
-    final creditValue = creditSummary!.valueInPaise;
+    // Calculate credit value using society's pricing
+    final creditValue = creditSummary!.calculateValueInPaise(
+      bwPricePerPagePaise: bwPricePerPagePaise,
+      colorPricePerPagePaise: colorPricePerPagePaise,
+    );
     return (total - creditValue).clamp(0, total);
   }
 
@@ -112,7 +134,8 @@ class OrderNotifier extends StateNotifier<OrderState> {
 
   /// Reset order state
   void resetOrder() {
-    state = OrderState();
+    final society = _ref.read(currentSocietyProvider);
+    state = OrderState(society: society);
   }
 
   /// Select document
@@ -160,10 +183,18 @@ class OrderNotifier extends StateNotifier<OrderState> {
     );
   }
 
-  /// Load user credits
+  /// Load user credits and society pricing
   Future<void> loadCredits() async {
     final user = _ref.read(currentUserProvider);
     if (user == null) return;
+
+    // Ensure society is set for pricing
+    if (state.society == null) {
+      final society = _ref.read(currentSocietyProvider);
+      if (society != null) {
+        state = state.copyWith(society: society);
+      }
+    }
 
     try {
       final creditSummary = await _supabaseService.getCreditSummary(user.id);

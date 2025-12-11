@@ -21,11 +21,18 @@ class AppConstants {
   static const Color textPrimaryColor = Color(0xFF1E293B); // Dark slate
   static const Color textSecondaryColor = Color(0xFF64748B); // Slate
 
-  // Pricing (in paise - 100 paise = 1 rupee)
-  static const int bwPricePerPagePaise = 300; // ₹3/page B/W
-  static const int colorPricePerPagePaise = 1000; // ₹10/page color
-  static const int bwCostPerPagePaise = 45; // ₹0.45 cost
-  static const int colorCostPerPagePaise = 69; // ₹0.69 cost
+  // Default Pricing (in paise - 100 paise = 1 rupee)
+  // These can be overridden per-society in the database
+  static const int defaultBwPricePerPagePaise = 300; // ₹3/page B/W
+  static const int defaultColorPricePerPagePaise = 1000; // ₹10/page color
+  static const int defaultBwCostPerPagePaise = 45; // ₹0.45 cost
+  static const int defaultColorCostPerPagePaise = 69; // ₹0.69 cost
+
+  // Legacy aliases for backwards compatibility
+  @Deprecated('Use Society.bwPricePerPagePaise or defaultBwPricePerPagePaise')
+  static const int bwPricePerPagePaise = defaultBwPricePerPagePaise;
+  @Deprecated('Use Society.colorPricePerPagePaise or defaultColorPricePerPagePaise')
+  static const int colorPricePerPagePaise = defaultColorPricePerPagePaise;
 
   // Order Settings
   static const int maxPagesPerOrder = 50;

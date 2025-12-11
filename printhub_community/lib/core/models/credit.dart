@@ -119,15 +119,33 @@ class CreditSummary {
 
   bool get hasCredits => totalBwPages > 0 || totalColorPages > 0;
 
-  /// Calculate credit value in paise
-  int get valueInPaise {
-    const bwPricePerPage = 300; // ₹3
-    const colorPricePerPage = 1000; // ₹10
-    return (totalBwPages * bwPricePerPage) + (totalColorPages * colorPricePerPage);
+  /// Calculate credit value in paise using provided pricing
+  /// If no pricing provided, uses default pricing from AppConstants
+  int calculateValueInPaise({
+    int bwPricePerPagePaise = 300,
+    int colorPricePerPagePaise = 1000,
+  }) {
+    return (totalBwPages * bwPricePerPagePaise) +
+           (totalColorPages * colorPricePerPagePaise);
   }
+
+  /// Legacy getter - uses default pricing
+  /// For accurate pricing, use calculateValueInPaise with society's pricing
+  int get valueInPaise => calculateValueInPaise();
 
   /// Calculate credit value in rupees
   double get valueInRupees => valueInPaise / 100;
+
+  /// Calculate credit value in rupees using provided pricing
+  double calculateValueInRupees({
+    int bwPricePerPagePaise = 300,
+    int colorPricePerPagePaise = 1000,
+  }) {
+    return calculateValueInPaise(
+      bwPricePerPagePaise: bwPricePerPagePaise,
+      colorPricePerPagePaise: colorPricePerPagePaise,
+    ) / 100;
+  }
 
   factory CreditSummary.fromCredits(List<Credit> credits) {
     final activeCredits = credits.where((c) => c.hasValue).toList();

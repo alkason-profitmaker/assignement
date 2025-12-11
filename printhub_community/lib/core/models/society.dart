@@ -1,3 +1,5 @@
+import '../constants/app_constants.dart';
+
 /// Model representing a registered residential society
 class Society {
   final String id;
@@ -11,6 +13,8 @@ class Society {
   final String? contactPhone;
   final String? contactEmail;
   final double commissionPercent;
+  final int bwPricePerPagePaise;
+  final int colorPricePerPagePaise;
   final bool isActive;
   final DateTime? onboardedAt;
   final DateTime createdAt;
@@ -28,11 +32,30 @@ class Society {
     this.contactPhone,
     this.contactEmail,
     this.commissionPercent = 40.0,
+    this.bwPricePerPagePaise = AppConstants.defaultBwPricePerPagePaise,
+    this.colorPricePerPagePaise = AppConstants.defaultColorPricePerPagePaise,
     this.isActive = true,
     this.onboardedAt,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  /// Calculate price for given pages using society's pricing
+  int calculatePrice({
+    required int bwPages,
+    required int colorPages,
+    int copies = 1,
+  }) {
+    final bwTotal = bwPages * bwPricePerPagePaise;
+    final colorTotal = colorPages * colorPricePerPagePaise;
+    return (bwTotal + colorTotal) * copies;
+  }
+
+  /// Get B/W price in rupees
+  double get bwPricePerPageRupees => bwPricePerPagePaise / 100;
+
+  /// Get color price in rupees
+  double get colorPricePerPageRupees => colorPricePerPagePaise / 100;
 
   factory Society.fromJson(Map<String, dynamic> json) {
     return Society(
@@ -47,6 +70,8 @@ class Society {
       contactPhone: json['contact_phone'] as String?,
       contactEmail: json['contact_email'] as String?,
       commissionPercent: (json['commission_percent'] as num?)?.toDouble() ?? 40.0,
+      bwPricePerPagePaise: json['bw_price_per_page_paise'] as int? ?? AppConstants.defaultBwPricePerPagePaise,
+      colorPricePerPagePaise: json['color_price_per_page_paise'] as int? ?? AppConstants.defaultColorPricePerPagePaise,
       isActive: json['is_active'] as bool? ?? true,
       onboardedAt: json['onboarded_at'] != null
           ? DateTime.parse(json['onboarded_at'] as String)
@@ -69,6 +94,8 @@ class Society {
       'contact_phone': contactPhone,
       'contact_email': contactEmail,
       'commission_percent': commissionPercent,
+      'bw_price_per_page_paise': bwPricePerPagePaise,
+      'color_price_per_page_paise': colorPricePerPagePaise,
       'is_active': isActive,
       'onboarded_at': onboardedAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
@@ -88,6 +115,8 @@ class Society {
     String? contactPhone,
     String? contactEmail,
     double? commissionPercent,
+    int? bwPricePerPagePaise,
+    int? colorPricePerPagePaise,
     bool? isActive,
     DateTime? onboardedAt,
     DateTime? createdAt,
@@ -105,6 +134,8 @@ class Society {
       contactPhone: contactPhone ?? this.contactPhone,
       contactEmail: contactEmail ?? this.contactEmail,
       commissionPercent: commissionPercent ?? this.commissionPercent,
+      bwPricePerPagePaise: bwPricePerPagePaise ?? this.bwPricePerPagePaise,
+      colorPricePerPagePaise: colorPricePerPagePaise ?? this.colorPricePerPagePaise,
       isActive: isActive ?? this.isActive,
       onboardedAt: onboardedAt ?? this.onboardedAt,
       createdAt: createdAt ?? this.createdAt,
