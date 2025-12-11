@@ -417,7 +417,7 @@ class OrderNotifier extends StateNotifier<OrderState> {
         // Update order with print job ID
         await Supabase.instance.client.from('orders').update({
           'epson_job_id': printResult.jobId,
-          'print_status': 'printing',
+          'print_status': 'PRINTING',
         }).eq('id', state.currentOrder!.id);
       } else {
         AppLogger.error('Print job failed: ${printResult.errorMessage}', tag: 'Order');
@@ -428,8 +428,8 @@ class OrderNotifier extends StateNotifier<OrderState> {
 
         // Update order status to failed
         await Supabase.instance.client.from('orders').update({
-          'print_status': 'failed',
-          'error_message': printResult.errorMessage,
+          'print_status': 'FAILED',
+          'print_error_code': printResult.errorMessage,
         }).eq('id', state.currentOrder!.id);
       }
     } catch (e) {

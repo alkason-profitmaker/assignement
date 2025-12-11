@@ -18,6 +18,8 @@ INSERT INTO societies (
     contact_phone,
     contact_email,
     commission_percent,
+    bw_price_per_page_paise,
+    color_price_per_page_paise,
     is_active,
     onboarded_at
 ) VALUES (
@@ -33,6 +35,8 @@ INSERT INTO societies (
     '9876543210',
     'rajesh@greenvalley.com',
     40.00,
+    300,   -- ₹3.00 per B/W page
+    1000,  -- ₹10.00 per color page
     true,
     NOW()
 );

@@ -22,6 +22,8 @@ CREATE TABLE societies (
     contact_phone VARCHAR(15),
     contact_email VARCHAR(100),
     commission_percent DECIMAL(5,2) DEFAULT 40.00,
+    bw_price_per_page_paise INTEGER NOT NULL DEFAULT 300,    -- ₹3.00 per B/W page
+    color_price_per_page_paise INTEGER NOT NULL DEFAULT 1000, -- ₹10.00 per color page
     is_active BOOLEAN DEFAULT true,
     onboarded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -103,7 +105,7 @@ CREATE TABLE orders (
     payment_status VARCHAR(20) DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING', 'PAID', 'REFUNDED')),
     paid_at TIMESTAMPTZ,
     epson_job_id VARCHAR(100),
-    print_status VARCHAR(20) DEFAULT 'WAITING' CHECK (print_status IN ('WAITING', 'QUEUED', 'PRINTING', 'DONE', 'FAILED')),
+    print_status VARCHAR(20) DEFAULT 'WAITING' CHECK (print_status IN ('WAITING', 'AWAITING_DEVICE', 'QUEUED', 'PRINTING', 'DONE', 'FAILED')),
     print_error_code VARCHAR(50),
     printed_at TIMESTAMPTZ,
     refund_status VARCHAR(20) CHECK (refund_status IN ('INITIATED', 'COMPLETED')),

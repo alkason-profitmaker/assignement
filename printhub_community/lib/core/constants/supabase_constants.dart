@@ -38,8 +38,10 @@ class ApiEndpoints {
   static const String initiateTransactionEndpoint = '/theia/api/v1/initiateTransaction';
 
   // Epson Connect API Endpoints
+  static const String epsonBaseUrl = 'https://api.epsonconnect.com';
   static const String epsonAuthEndpoint = '/api/1/printing/oauth2/token';
   static const String epsonPrintersEndpoint = '/api/1/printing/printers';
-  static const String epsonJobsEndpoint = '/api/1/printing/printers/{deviceId}/jobs';
-  static const String epsonPrintEndpoint = '/api/1/printing/printers/{deviceId}/jobs/{jobId}/print';
+  // Note: deviceId and jobId are appended dynamically in EpsonService
+  static const String epsonPrintEndpoint = '/api/1/printing/printers';
+  static const String epsonJobStatusEndpoint = '/api/1/printing/printers';
 }
