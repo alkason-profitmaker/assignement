@@ -441,9 +441,16 @@ class _StationCard extends StatelessWidget {
   }
 }
 
-class _PricingCard extends StatelessWidget {
+class _PricingCard extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final societyState = ref.watch(societyProvider);
+    final society = societyState.currentSociety;
+
+    // Use society pricing or defaults
+    final bwPrice = society?.bwPricePerPagePaise ?? 300;
+    final colorPrice = society?.colorPricePerPagePaise ?? 1000;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -473,14 +480,14 @@ class _PricingCard extends StatelessWidget {
               Expanded(
                 child: _PriceItem(
                   label: 'Black & White',
-                  price: '3',
+                  price: '${(bwPrice / 100).toStringAsFixed(0)}',
                   icon: Icons.article,
                 ),
               ),
               Expanded(
                 child: _PriceItem(
                   label: 'Color',
-                  price: '10',
+                  price: '${(colorPrice / 100).toStringAsFixed(0)}',
                   icon: Icons.palette,
                 ),
               ),
