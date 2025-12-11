@@ -318,6 +318,7 @@ class DocumentService {
   }
 
   /// Generate photo collage as PDF bytes
+  /// Uses 300 DPI for sharp prints, auto-crops to fill cells, white borders
   Future<Uint8List> generateCollage(PhotoCollage collage) async {
     if (collage.photos.isEmpty) {
       throw Exception('No photos provided');
@@ -326,22 +327,30 @@ class DocumentService {
     // Create PDF document
     final pdf = pw.Document();
 
-    // A4 dimensions in points (72 points per inch)
-    const a4Width = 595.0;
-    const a4Height = 842.0;
-    const margin = 20.0;
+    // A4 at 300 DPI: 2480 x 3508 pixels
+    // But PDF uses points (72 per inch), so A4 = 595.28 x 841.89 points
+    const a4Width = 595.28;
+    const a4Height = 841.89;
+    const margin = 14.0; // ~5mm margin
+    const cellPadding = 8.0; // White border between images
 
-    // Calculate grid layout based on number of photos
-    final photoCount = collage.photos.length;
-    final (cols, rows) = _calculateGridLayout(photoCount);
+    // Use layout from collage
+    final cols = collage.layout.cols;
+    final rows = collage.layout.rows;
+    final photosPerPage = collage.layout.photosPerPage;
 
-    // Calculate cell dimensions
-    final cellWidth = (a4Width - margin * 2) / cols;
-    final cellHeight = (a4Height - margin * 2) / rows;
-    final photoPadding = 5.0;
+    // Calculate cell dimensions (accounting for padding between cells)
+    final totalHorizontalPadding = cellPadding * (cols - 1);
+    final totalVerticalPadding = cellPadding * (rows - 1);
+    final cellWidth = (a4Width - margin * 2 - totalHorizontalPadding) / cols;
+    final cellHeight = (a4Height - margin * 2 - totalVerticalPadding) / rows;
+
+    // Target pixel size at 300 DPI for sharp prints
+    // 1 point = 1/72 inch, so at 300 DPI: pixels = points * 300/72 = points * 4.17
+    final targetWidthPx = (cellWidth * 4.17).round();
+    final targetHeightPx = (cellHeight * 4.17).round();
 
     // Process photos in batches per page
-    final photosPerPage = cols * rows;
     var photoIndex = 0;
 
     while (photoIndex < collage.photos.length) {
@@ -350,47 +359,57 @@ class DocumentService {
           .take(photosPerPage)
           .toList();
 
+      // Pre-process images for this page (crop and resize at 300 DPI)
+      final processedImages = <Uint8List>[];
+      for (final photo in pagePhotos) {
+        final decodedImage = img.decodeImage(photo.bytes);
+        if (decodedImage != null) {
+          // Auto-crop to fill cell (center crop)
+          final cropped = _cropToFill(decodedImage, targetWidthPx, targetHeightPx);
+          // Encode as high-quality JPEG
+          processedImages.add(Uint8List.fromList(img.encodeJpg(cropped, quality: 95)));
+        }
+      }
+
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           margin: pw.EdgeInsets.all(margin),
           build: (pw.Context context) {
-            return pw.GridView(
-              crossAxisCount: cols,
-              mainAxisSpacing: photoPadding,
-              crossAxisSpacing: photoPadding,
-              childAspectRatio: cellWidth / cellHeight,
-              children: pagePhotos.map((photo) {
-                // Decode and process image
-                final decodedImage = img.decodeImage(photo.bytes);
-                if (decodedImage == null) {
-                  return pw.Container();
-                }
+            return pw.Column(
+              children: List.generate(rows, (row) {
+                return pw.Expanded(
+                  child: pw.Row(
+                    children: List.generate(cols, (col) {
+                      final idx = row * cols + col;
+                      if (idx >= processedImages.length) {
+                        return pw.Expanded(child: pw.Container());
+                      }
 
-                // Resize image to fit cell while maintaining aspect ratio
-                final resized = _resizeForCell(
-                  decodedImage,
-                  (cellWidth - photoPadding * 2).toInt(),
-                  (cellHeight - photoPadding * 2).toInt(),
-                );
-
-                final imageBytes = Uint8List.fromList(img.encodeJpg(resized));
-
-                return pw.Container(
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(
-                      color: PdfColors.grey300,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: pw.Center(
-                    child: pw.Image(
-                      pw.MemoryImage(imageBytes),
-                      fit: pw.BoxFit.contain,
-                    ),
+                      return pw.Expanded(
+                        child: pw.Padding(
+                          padding: pw.EdgeInsets.only(
+                            right: col < cols - 1 ? cellPadding : 0,
+                            bottom: row < rows - 1 ? cellPadding : 0,
+                          ),
+                          child: pw.Container(
+                            decoration: pw.BoxDecoration(
+                              border: pw.Border.all(
+                                color: PdfColors.white,
+                                width: 1,
+                              ),
+                            ),
+                            child: pw.Image(
+                              pw.MemoryImage(processedImages[idx]),
+                              fit: pw.BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ),
                 );
-              }).toList(),
+              }),
             );
           },
         ),
@@ -402,37 +421,43 @@ class DocumentService {
     return pdf.save();
   }
 
-  /// Calculate optimal grid layout for number of photos
-  (int cols, int rows) _calculateGridLayout(int photoCount) {
-    if (photoCount <= 1) return (1, 1);
-    if (photoCount <= 2) return (2, 1);
-    if (photoCount <= 4) return (2, 2);
-    if (photoCount <= 6) return (3, 2);
-    if (photoCount <= 9) return (3, 3);
-    if (photoCount <= 12) return (4, 3);
-    if (photoCount <= 16) return (4, 4);
-    return (5, 4); // Max 20 photos per page
-  }
+  /// Crop image to fill target dimensions (center crop)
+  img.Image _cropToFill(img.Image image, int targetWidth, int targetHeight) {
+    final imageAspect = image.width / image.height;
+    final targetAspect = targetWidth / targetHeight;
 
-  /// Resize image to fit within cell dimensions while maintaining aspect ratio
-  img.Image _resizeForCell(img.Image image, int maxWidth, int maxHeight) {
-    final aspectRatio = image.width / image.height;
-    final cellAspectRatio = maxWidth / maxHeight;
+    int cropWidth, cropHeight, offsetX, offsetY;
 
-    int newWidth;
-    int newHeight;
-
-    if (aspectRatio > cellAspectRatio) {
-      // Image is wider than cell
-      newWidth = maxWidth;
-      newHeight = (maxWidth / aspectRatio).round();
+    if (imageAspect > targetAspect) {
+      // Image is wider - crop sides
+      cropHeight = image.height;
+      cropWidth = (image.height * targetAspect).round();
+      offsetX = (image.width - cropWidth) ~/ 2;
+      offsetY = 0;
     } else {
-      // Image is taller than cell
-      newHeight = maxHeight;
-      newWidth = (maxHeight * aspectRatio).round();
+      // Image is taller - crop top/bottom
+      cropWidth = image.width;
+      cropHeight = (image.width / targetAspect).round();
+      offsetX = 0;
+      offsetY = (image.height - cropHeight) ~/ 2;
     }
 
-    return img.copyResize(image, width: newWidth, height: newHeight);
+    // Crop to aspect ratio
+    final cropped = img.copyCrop(
+      image,
+      x: offsetX,
+      y: offsetY,
+      width: cropWidth,
+      height: cropHeight,
+    );
+
+    // Resize to target dimensions at 300 DPI quality
+    return img.copyResize(
+      cropped,
+      width: targetWidth,
+      height: targetHeight,
+      interpolation: img.Interpolation.cubic,
+    );
   }
 
   /// Generate single image PDF (for printing single photos on A4)

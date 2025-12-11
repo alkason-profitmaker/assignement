@@ -159,14 +159,17 @@ class CollagePhoto {
 
 /// Collage layout options
 enum CollageLayout {
-  single(1, '1 per page'),
-  twoByTwo(4, '2x2 (4 per page)'),
-  threeByThree(9, '3x3 (9 per page)'),
-  passport(8, 'Passport size (8 per page)');
+  twoByOne(2, 1, '2×1 Large (2 per page)'),
+  twoByTwo(2, 2, '2×2 Standard (4 per page)'),
+  threeByTwo(3, 2, '3×2 Wallet (6 per page)'),
+  fourByTwo(4, 2, '4×2 Passport (8 per page)');
 
-  final int photosPerPage;
+  final int cols;
+  final int rows;
   final String label;
-  const CollageLayout(this.photosPerPage, this.label);
+  const CollageLayout(this.cols, this.rows, this.label);
+
+  int get photosPerPage => cols * rows;
 }
 
 /// Paper sizes

@@ -24,7 +24,7 @@ class _CollageFlowScreenState extends ConsumerState<CollageFlowScreen> {
   final DocumentService _documentService = DocumentService();
 
   Future<void> _pickPhotos() async {
-    final photos = await _documentService.pickImages(maxImages: 20);
+    final photos = await _documentService.pickImages(maxImages: 8);
     if (photos != null && photos.isNotEmpty) {
       setState(() {
         _selectedPhotos = photos;
@@ -158,7 +158,7 @@ class _CollageFlowScreenState extends ConsumerState<CollageFlowScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Choose up to 20 photos for your collage',
+            'Choose 2-8 photos for your collage',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey.shade600,
@@ -355,30 +355,30 @@ class _CollageFlowScreenState extends ConsumerState<CollageFlowScreen> {
             child: ListView(
               children: [
                 _buildLayoutOption(
-                  layout: CollageLayout.single,
-                  title: '1 Photo per Page',
-                  subtitle: 'Full page, best quality',
-                  icon: Icons.crop_portrait,
-                  sheets: _selectedPhotos.length,
+                  layout: CollageLayout.twoByOne,
+                  title: '2×1 Large (2 per page)',
+                  subtitle: 'Large prints, best quality',
+                  icon: Icons.view_stream,
+                  sheets: (_selectedPhotos.length / 2).ceil(),
                 ),
                 _buildLayoutOption(
                   layout: CollageLayout.twoByTwo,
-                  title: '4 Photos per Page (2x2)',
-                  subtitle: 'Great for sharing',
+                  title: '2×2 Standard (4 per page)',
+                  subtitle: 'Standard photo size',
                   icon: Icons.grid_view,
                   sheets: (_selectedPhotos.length / 4).ceil(),
                 ),
                 _buildLayoutOption(
-                  layout: CollageLayout.threeByThree,
-                  title: '9 Photos per Page (3x3)',
-                  subtitle: 'Compact layout',
+                  layout: CollageLayout.threeByTwo,
+                  title: '3×2 Wallet (6 per page)',
+                  subtitle: 'Wallet size photos',
                   icon: Icons.apps,
-                  sheets: (_selectedPhotos.length / 9).ceil(),
+                  sheets: (_selectedPhotos.length / 6).ceil(),
                 ),
                 _buildLayoutOption(
-                  layout: CollageLayout.passport,
-                  title: 'Passport Size (8 per page)',
-                  subtitle: 'ID photo prints',
+                  layout: CollageLayout.fourByTwo,
+                  title: '4×2 Passport (8 per page)',
+                  subtitle: 'ID & passport photos',
                   icon: Icons.badge,
                   sheets: (_selectedPhotos.length / 8).ceil(),
                 ),
