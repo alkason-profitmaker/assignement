@@ -316,12 +316,14 @@ async function initiateAutoRefund(
     }
 
     // Add goodwill credit regardless of refund success
+    // 1 free B/W page = 300 paise (default pricing)
     await supabaseClient
       .from('credits')
       .insert({
         user_id: order.user_id,
         pages_bw: 1,
         pages_color: 0,
+        balance_paise: 300, // 1 B/W page at default pricing
         reason: `Goodwill credit for failed print: ${reason}`,
         source_order_id: order.id,
         expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days
