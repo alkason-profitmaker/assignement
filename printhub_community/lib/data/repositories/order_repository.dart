@@ -3,6 +3,7 @@ import 'package:dartz/dartz.dart';
 import '../../core/error/failures.dart';
 import '../../core/models/order.dart';
 import '../../core/models/document.dart';
+import '../../core/models/society.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/paytm_service.dart';
 import '../../core/services/document_service.dart';
@@ -102,12 +103,25 @@ class OrderRepositoryImpl implements OrderRepository {
         ));
       }
 
-      // Calculate price
-      final amountPaise = PrintOrder.calculatePrice(
-        bwPages: request.bwPages,
-        colorPages: request.colorPages,
-        copies: request.copies,
-      );
+      // Get society for pricing
+      final society = await _supabaseService.getSociety(station.societyId);
+
+      // Calculate price using society's pricing (or defaults)
+      final int amountPaise;
+      if (society != null) {
+        amountPaise = society.calculatePrice(
+          bwPages: request.bwPages,
+          colorPages: request.colorPages,
+          copies: request.copies,
+        );
+      } else {
+        // Fallback to default pricing
+        amountPaise = PrintOrder.calculatePrice(
+          bwPages: request.bwPages,
+          colorPages: request.colorPages,
+          copies: request.copies,
+        );
+      }
 
       // Create order in database
       final order = await _supabaseService.createOrder(

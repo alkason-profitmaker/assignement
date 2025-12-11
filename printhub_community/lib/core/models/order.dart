@@ -157,14 +157,19 @@ class PrintOrder {
   bool get isExpired => DateTime.now().isAfter(expiresAt);
   bool get canBeRefunded => isPaid && !isRefunded && !isCompleted;
 
-  /// Calculate price for given pages
+  /// Calculate price for given pages using default pricing
+  /// For society-specific pricing, use Society.calculatePrice() instead
   static int calculatePrice({
     required int bwPages,
     required int colorPages,
     int copies = 1,
+    int? bwPricePerPagePaise,
+    int? colorPricePerPagePaise,
   }) {
-    final bwTotal = bwPages * AppConstants.bwPricePerPagePaise;
-    final colorTotal = colorPages * AppConstants.colorPricePerPagePaise;
+    final bwPrice = bwPricePerPagePaise ?? AppConstants.defaultBwPricePerPagePaise;
+    final colorPrice = colorPricePerPagePaise ?? AppConstants.defaultColorPricePerPagePaise;
+    final bwTotal = bwPages * bwPrice;
+    final colorTotal = colorPages * colorPrice;
     return (bwTotal + colorTotal) * copies;
   }
 
