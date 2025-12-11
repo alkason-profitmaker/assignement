@@ -11,6 +11,12 @@ class Station {
   final DateTime? lastHealthCheck;
   final DateTime createdAt;
 
+  // IoT/Display fields
+  final String? stationApiKey;
+  final String displayType; // 'web', 'esp32', 'tablet'
+  final DateTime? lastPollAt;
+  final Map<String, dynamic>? displayDeviceInfo;
+
   // Runtime status (not persisted)
   final StationStatus? currentStatus;
 
@@ -25,6 +31,10 @@ class Station {
     this.isActive = true,
     this.lastHealthCheck,
     required this.createdAt,
+    this.stationApiKey,
+    this.displayType = 'web',
+    this.lastPollAt,
+    this.displayDeviceInfo,
     this.currentStatus,
   });
 
@@ -42,6 +52,12 @@ class Station {
           ? DateTime.parse(json['last_health_check'] as String)
           : null,
       createdAt: DateTime.parse(json['created_at'] as String),
+      stationApiKey: json['station_api_key'] as String?,
+      displayType: json['display_type'] as String? ?? 'web',
+      lastPollAt: json['last_poll_at'] != null
+          ? DateTime.parse(json['last_poll_at'] as String)
+          : null,
+      displayDeviceInfo: json['display_device_info'] as Map<String, dynamic>?,
     );
   }
 
@@ -57,6 +73,10 @@ class Station {
       'is_active': isActive,
       'last_health_check': lastHealthCheck?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
+      'station_api_key': stationApiKey,
+      'display_type': displayType,
+      'last_poll_at': lastPollAt?.toIso8601String(),
+      'display_device_info': displayDeviceInfo,
     };
   }
 
@@ -71,6 +91,10 @@ class Station {
     bool? isActive,
     DateTime? lastHealthCheck,
     DateTime? createdAt,
+    String? stationApiKey,
+    String? displayType,
+    DateTime? lastPollAt,
+    Map<String, dynamic>? displayDeviceInfo,
     StationStatus? currentStatus,
   }) {
     return Station(
@@ -84,6 +108,10 @@ class Station {
       isActive: isActive ?? this.isActive,
       lastHealthCheck: lastHealthCheck ?? this.lastHealthCheck,
       createdAt: createdAt ?? this.createdAt,
+      stationApiKey: stationApiKey ?? this.stationApiKey,
+      displayType: displayType ?? this.displayType,
+      lastPollAt: lastPollAt ?? this.lastPollAt,
+      displayDeviceInfo: displayDeviceInfo ?? this.displayDeviceInfo,
       currentStatus: currentStatus ?? this.currentStatus,
     );
   }

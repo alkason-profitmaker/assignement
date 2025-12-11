@@ -28,12 +28,8 @@ Future<void> configureDependencies() async {
 
   getIt.registerLazySingleton<PaytmService>(
     () => PaytmService(
-      merchantId: AppConfig.paytmMerchantId,
-      merchantKey: AppConfig.paytmMerchantKey,
-      website: AppConfig.paytmWebsite,
-      industryType: AppConfig.paytmIndustryType,
-      channelId: AppConfig.paytmChannelId,
-      baseUrl: AppConfig.paytmBaseUrl,
+      supabaseUrl: AppConfig.supabaseUrl,
+      supabaseAnonKey: AppConfig.supabaseAnonKey,
     ),
   );
 

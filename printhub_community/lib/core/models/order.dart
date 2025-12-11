@@ -29,6 +29,8 @@ class PrintOrder {
   final String? refundType;
   final String? paytmRefundId;
   final bool goodwillCreditGiven;
+  final String? qrData;
+  final String? qrCodeId;
   final DateTime expiresAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -61,6 +63,8 @@ class PrintOrder {
     this.refundType,
     this.paytmRefundId,
     this.goodwillCreditGiven = false,
+    this.qrData,
+    this.qrCodeId,
     required this.expiresAt,
     required this.createdAt,
     required this.updatedAt,
@@ -99,6 +103,8 @@ class PrintOrder {
       refundType: json['refund_type'] as String?,
       paytmRefundId: json['paytm_refund_id'] as String?,
       goodwillCreditGiven: json['goodwill_credit_given'] as bool? ?? false,
+      qrData: json['qr_data'] as String?,
+      qrCodeId: json['qr_code_id'] as String?,
       expiresAt: DateTime.parse(json['expires_at'] as String),
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -134,6 +140,8 @@ class PrintOrder {
       'refund_type': refundType,
       'paytm_refund_id': paytmRefundId,
       'goodwill_credit_given': goodwillCreditGiven,
+      'qr_data': qrData,
+      'qr_code_id': qrCodeId,
       'expires_at': expiresAt.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -201,6 +209,8 @@ class PrintOrder {
     String? refundType,
     String? paytmRefundId,
     bool? goodwillCreditGiven,
+    String? qrData,
+    String? qrCodeId,
     DateTime? expiresAt,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -233,6 +243,8 @@ class PrintOrder {
       refundType: refundType ?? this.refundType,
       paytmRefundId: paytmRefundId ?? this.paytmRefundId,
       goodwillCreditGiven: goodwillCreditGiven ?? this.goodwillCreditGiven,
+      qrData: qrData ?? this.qrData,
+      qrCodeId: qrCodeId ?? this.qrCodeId,
       expiresAt: expiresAt ?? this.expiresAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

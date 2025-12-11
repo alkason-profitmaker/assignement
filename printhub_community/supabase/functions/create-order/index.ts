@@ -85,7 +85,30 @@ serve(async (req: Request) => {
       .order('expires_at', { ascending: true })
 
     let creditsUsedPaise = 0
-    // TODO: Apply credits logic
+    const creditsToUpdate: Array<{ id: string; newBalance: number }> = []
+
+    // Apply credits logic - use oldest credits first (FIFO)
+    if (credits && credits.length > 0) {
+      let remainingAmount = totalAmountPaise
+
+      for (const credit of credits) {
+        if (remainingAmount <= 0) break
+
+        const availableCredit = credit.balance_paise || 0
+        if (availableCredit <= 0) continue
+
+        // Use this credit
+        const creditToUse = Math.min(availableCredit, remainingAmount)
+        creditsUsedPaise += creditToUse
+        remainingAmount -= creditToUse
+
+        // Track credit update
+        creditsToUpdate.push({
+          id: credit.id,
+          newBalance: availableCredit - creditToUse
+        })
+      }
+    }
 
     const finalAmountPaise = Math.max(0, totalAmountPaise - creditsUsedPaise)
     const finalAmountRupees = finalAmountPaise / 100
@@ -127,6 +150,20 @@ serve(async (req: Request) => {
     }
 
     console.log('Order created:', order.id)
+
+    // Update credits used (deduct balances)
+    if (creditsToUpdate.length > 0) {
+      for (const creditUpdate of creditsToUpdate) {
+        await supabaseClient
+          .from('credits')
+          .update({
+            balance_paise: creditUpdate.newBalance,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', creditUpdate.id)
+      }
+      console.log(`Applied ${creditsUsedPaise} paise from ${creditsToUpdate.length} credit(s)`)
+    }
 
     // Generate Paytm Dynamic QR
     let qrData = null
