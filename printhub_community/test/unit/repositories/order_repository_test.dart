@@ -8,25 +8,21 @@ import 'package:printhub_community/data/repositories/order_repository.dart';
 
 class MockSupabaseService extends Mock implements SupabaseService {}
 class MockPaytmService extends Mock implements PaytmService {}
-class MockEpsonService extends Mock implements EpsonService {}
 class MockDocumentService extends Mock implements DocumentService {}
 
 void main() {
   late OrderRepositoryImpl repository;
   late MockSupabaseService mockSupabase;
   late MockPaytmService mockPaytm;
-  late MockEpsonService mockEpson;
   late MockDocumentService mockDocument;
 
   setUp(() {
     mockSupabase = MockSupabaseService();
     mockPaytm = MockPaytmService();
-    mockEpson = MockEpsonService();
     mockDocument = MockDocumentService();
     repository = OrderRepositoryImpl(
       mockSupabase,
       mockPaytm,
-      mockEpson,
       mockDocument,
     );
   });

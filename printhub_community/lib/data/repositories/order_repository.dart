@@ -5,7 +5,6 @@ import '../../core/models/order.dart';
 import '../../core/models/document.dart';
 import '../../core/services/supabase_service.dart';
 import '../../core/services/paytm_service.dart';
-import '../../core/services/epson_service.dart';
 import '../../core/services/document_service.dart';
 
 /// Order repository interface
@@ -69,13 +68,11 @@ enum PaymentStatus {
 class OrderRepositoryImpl implements OrderRepository {
   final SupabaseService _supabaseService;
   final PaytmService _paytmService;
-  final EpsonService _epsonService;
   final DocumentService _documentService;
 
   OrderRepositoryImpl(
     this._supabaseService,
     this._paytmService,
-    this._epsonService,
     this._documentService,
   );
 

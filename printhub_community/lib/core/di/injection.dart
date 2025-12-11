@@ -57,7 +57,6 @@ Future<void> configureDependencies() async {
     () => OrderRepositoryImpl(
       getIt<SupabaseService>(),
       getIt<PaytmService>(),
-      getIt<EpsonService>(),
       getIt<DocumentService>(),
     ),
   );
