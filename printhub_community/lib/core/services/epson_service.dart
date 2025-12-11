@@ -115,8 +115,34 @@ class EpsonService {
   // Print Job Operations
   // ============================================
 
-  /// Submit print job
-  Future<EpsonPrintJob> submitPrintJob({
+  /// Submit print job (simplified interface for order provider)
+  /// Returns a result object with success/failure status
+  Future<PrintJobResult> submitPrintJob({
+    required String printerEmail,
+    required Uint8List documentBytes,
+    required String fileName,
+    required int copies,
+    required String colorMode,
+  }) async {
+    try {
+      final settings = PrintSettings(
+        colorMode: colorMode,
+        copies: copies,
+      );
+      final job = await _submitPrintJobInternal(
+        printerEmail: printerEmail,
+        documentBytes: documentBytes,
+        fileName: fileName,
+        settings: settings,
+      );
+      return PrintJobResult.success(job.jobId);
+    } catch (e) {
+      return PrintJobResult.failure(e.toString());
+    }
+  }
+
+  /// Internal print job submission with full settings
+  Future<EpsonPrintJob> _submitPrintJobInternal({
     required String printerEmail,
     required Uint8List documentBytes,
     required String fileName,
@@ -382,6 +408,27 @@ class PrinterReadyResult {
 
   factory PrinterReadyResult.notReady(String reason) {
     return PrinterReadyResult._(isReady: false, errorMessage: reason);
+  }
+}
+
+/// Result of a print job submission
+class PrintJobResult {
+  final bool success;
+  final String? jobId;
+  final String? errorMessage;
+
+  PrintJobResult._({
+    required this.success,
+    this.jobId,
+    this.errorMessage,
+  });
+
+  factory PrintJobResult.success(String jobId) {
+    return PrintJobResult._(success: true, jobId: jobId);
+  }
+
+  factory PrintJobResult.failure(String errorMessage) {
+    return PrintJobResult._(success: false, errorMessage: errorMessage);
   }
 }
 

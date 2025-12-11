@@ -421,6 +421,32 @@ class DocumentService {
     return pdf.save();
   }
 
+  /// Resize image to fit within max dimensions while maintaining aspect ratio
+  img.Image _resizeForCell(img.Image image, int maxWidth, int maxHeight) {
+    final aspectRatio = image.width / image.height;
+    int newWidth, newHeight;
+
+    if (image.width > maxWidth || image.height > maxHeight) {
+      if (aspectRatio > maxWidth / maxHeight) {
+        // Width is the limiting factor
+        newWidth = maxWidth;
+        newHeight = (maxWidth / aspectRatio).round();
+      } else {
+        // Height is the limiting factor
+        newHeight = maxHeight;
+        newWidth = (maxHeight * aspectRatio).round();
+      }
+      return img.copyResize(
+        image,
+        width: newWidth,
+        height: newHeight,
+        interpolation: img.Interpolation.cubic,
+      );
+    }
+
+    return image; // Already fits
+  }
+
   /// Crop image to fill target dimensions (center crop)
   img.Image _cropToFill(img.Image image, int targetWidth, int targetHeight) {
     final imageAspect = image.width / image.height;
