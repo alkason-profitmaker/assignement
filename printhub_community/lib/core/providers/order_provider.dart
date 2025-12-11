@@ -458,10 +458,9 @@ class OrderNotifier extends StateNotifier<OrderState> {
 }
 
 /// Payment callback service provider
+/// Monitors payment status via Supabase Realtime
 final paymentCallbackServiceProvider = Provider<PaymentCallbackService>((ref) {
-  final paytmService = ref.watch(paytmServiceProvider);
   return PaymentCallbackService(
-    paytmService: paytmService,
     supabase: Supabase.instance.client,
   );
 });

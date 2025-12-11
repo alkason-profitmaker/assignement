@@ -28,15 +28,12 @@ final isConnectedProvider = FutureProvider<bool>((ref) async {
   return ref.watch(networkServiceProvider).isConnected();
 });
 
-/// Provider for PaytmService - uses AppConfig for credentials
+/// Provider for PaytmService - uses Edge Functions for secure payment operations
+/// NOTE: Merchant credentials are kept server-side for security
 final paytmServiceProvider = Provider<PaytmService>((ref) {
   return PaytmService(
-    merchantId: AppConfig.paytmMerchantId,
-    merchantKey: AppConfig.paytmMerchantKey,
-    website: AppConfig.paytmWebsite,
-    industryType: AppConfig.paytmIndustryType,
-    channelId: AppConfig.paytmChannelId,
-    baseUrl: AppConfig.paytmBaseUrl,
+    supabaseUrl: AppConfig.supabaseUrl,
+    supabaseAnonKey: AppConfig.supabaseAnonKey,
   );
 });
 

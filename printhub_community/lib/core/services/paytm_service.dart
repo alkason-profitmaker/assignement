@@ -1,251 +1,99 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
-import '../constants/supabase_constants.dart';
 import '../logging/app_logger.dart';
 
-/// Service for Paytm Dynamic QR and payment operations
-/// Handles QR generation for Soundbox payments and refund processing
+/// Service for Paytm payment operations
+/// NOTE: All sensitive operations (checksum generation, QR creation) happen server-side
+/// This service mainly handles transaction status checks and models
 class PaytmService {
-  final String merchantId;
-  final String merchantKey;
-  final String website;
-  final String industryType;
-  final String channelId;
-  final String baseUrl;
+  final String supabaseUrl;
+  final String supabaseAnonKey;
 
   final http.Client _client;
 
   PaytmService({
-    required this.merchantId,
-    required this.merchantKey,
-    required this.website,
-    required this.industryType,
-    required this.channelId,
-    required this.baseUrl,
+    required this.supabaseUrl,
+    required this.supabaseAnonKey,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
   // ============================================
-  // QR Code Generation
+  // Order Creation (via Edge Function)
   // ============================================
 
-  /// Generate Dynamic QR code for order
-  /// Returns QR code data that can be displayed or used with Soundbox
-  Future<PaytmQrResponse> generateDynamicQr({
-    required String orderId,
-    required double amount,
-    String? posId,
+  /// Create order via Edge Function
+  /// This handles Paytm checksum generation server-side for security
+  Future<CreateOrderResponse> createOrder({
+    required String userId,
+    required String stationId,
+    required String fileName,
+    String? fileHash,
+    required int totalPages,
+    required int bwPages,
+    required int colorPages,
+    required int copies,
+    required String authToken,
   }) async {
-    final url = '$baseUrl${ApiEndpoints.generateQrEndpoint}';
+    final url = '$supabaseUrl/functions/v1/create-order';
 
-    AppLogger.debug('Generating Paytm QR for order: $orderId, amount: $amount', tag: 'Paytm');
-
-    final body = {
-      'mid': merchantId,
-      'orderId': orderId,
-      'amount': amount.toStringAsFixed(2),
-      'businessType': 'UPI_QR_CODE',
-      if (posId != null) 'posId': posId,
-    };
-
-    // Generate checksum for request body
-    final checksum = _generateChecksum(body);
-
-    final requestBody = {
-      'body': body,
-      'head': {
-        'signature': checksum,
-      }
-    };
+    AppLogger.debug('Creating order via Edge Function', tag: 'Paytm');
 
     try {
       final response = await _client.post(
         Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+          'apikey': supabaseAnonKey,
         },
-        body: jsonEncode(requestBody),
+        body: jsonEncode({
+          'userId': userId,
+          'stationId': stationId,
+          'fileName': fileName,
+          'fileHash': fileHash,
+          'totalPages': totalPages,
+          'bwPages': bwPages,
+          'colorPages': colorPages,
+          'copies': copies,
+        }),
       );
 
-      AppLogger.debug('Paytm QR response: ${response.statusCode}', tag: 'Paytm');
+      AppLogger.debug('Create order response: ${response.statusCode}', tag: 'Paytm');
 
       if (response.statusCode != 200) {
         throw PaytmException(
-          'QR generation failed',
+          'Order creation failed',
           statusCode: response.statusCode,
           body: response.body,
         );
       }
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final result = PaytmQrResponse.fromJson(data);
 
-      if (!result.success) {
-        throw PaytmException(result.errorMessage ?? 'QR generation failed');
+      if (data['success'] != true) {
+        throw PaytmException(data['error'] ?? 'Order creation failed');
       }
 
-      return result;
+      return CreateOrderResponse.fromJson(data);
     } catch (e) {
-      AppLogger.error('Paytm QR generation error', error: e, tag: 'Paytm');
+      AppLogger.error('Create order error', error: e, tag: 'Paytm');
       rethrow;
     }
   }
 
   // ============================================
-  // Transaction Status
+  // Transaction Status (via Edge Function)
   // ============================================
 
   /// Check transaction status
+  /// Note: For MVP, we rely on webhook + Supabase Realtime instead of polling
   Future<PaytmTransactionStatus> getTransactionStatus(String orderId) async {
-    final url = '$baseUrl${ApiEndpoints.txnStatusEndpoint}';
-
-    AppLogger.debug('Checking transaction status for: $orderId', tag: 'Paytm');
-
-    final body = {
-      'mid': merchantId,
-      'orderId': orderId,
-    };
-
-    final checksum = _generateChecksum(body);
-
-    try {
-      final response = await _client.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'body': body,
-          'head': {
-            'signature': checksum,
-          }
-        }),
-      );
-
-      if (response.statusCode != 200) {
-        throw PaytmException(
-          'Status check failed',
-          statusCode: response.statusCode,
-          body: response.body,
-        );
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return PaytmTransactionStatus.fromJson(data);
-    } catch (e) {
-      AppLogger.error('Paytm status check error', error: e, tag: 'Paytm');
-      rethrow;
-    }
-  }
-
-  // ============================================
-  // Refund Processing
-  // ============================================
-
-  /// Initiate refund for a transaction
-  Future<PaytmRefundResponse> initiateRefund({
-    required String orderId,
-    required String txnId,
-    required String refundId,
-    required double amount,
-  }) async {
-    final url = '$baseUrl${ApiEndpoints.refundEndpoint}';
-
-    AppLogger.info('Initiating refund for order: $orderId, amount: $amount', tag: 'Paytm');
-
-    final body = {
-      'mid': merchantId,
-      'txnType': 'REFUND',
-      'orderId': orderId,
-      'txnId': txnId,
-      'refId': refundId,
-      'refundAmount': amount.toStringAsFixed(2),
-    };
-
-    final checksum = _generateChecksum(body);
-
-    try {
-      final response = await _client.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'body': body,
-          'head': {
-            'signature': checksum,
-          }
-        }),
-      );
-
-      AppLogger.debug('Paytm refund response: ${response.statusCode}', tag: 'Paytm');
-
-      if (response.statusCode != 200) {
-        throw PaytmException(
-          'Refund failed',
-          statusCode: response.statusCode,
-          body: response.body,
-        );
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final result = PaytmRefundResponse.fromJson(data);
-
-      if (!result.success) {
-        throw PaytmException(result.errorMessage ?? 'Refund failed');
-      }
-
-      AppLogger.info('Refund successful for order: $orderId', tag: 'Paytm');
-      return result;
-    } catch (e) {
-      AppLogger.error('Paytm refund error', error: e, tag: 'Paytm');
-      rethrow;
-    }
-  }
-
-  // ============================================
-  // Webhook Verification
-  // ============================================
-
-  /// Verify webhook signature from Paytm
-  bool verifyWebhookSignature(Map<String, dynamic> payload, String signature) {
-    try {
-      // For webhook verification, exclude the checksum field
-      final params = Map<String, dynamic>.from(payload)
-        ..remove('CHECKSUMHASH');
-
-      final calculatedSignature = _generateChecksum(params);
-      final isValid = calculatedSignature == signature;
-
-      if (!isValid) {
-        AppLogger.warning('Webhook signature mismatch', tag: 'Paytm');
-      }
-
-      return isValid;
-    } catch (e) {
-      AppLogger.error('Webhook verification error', error: e, tag: 'Paytm');
-      return false;
-    }
-  }
-
-  // ============================================
-  // Checksum Generation
-  // ============================================
-
-  String _generateChecksum(Map<String, dynamic> params) {
-    // Sort parameters alphabetically
-    final sortedKeys = params.keys.toList()..sort();
-    final paramString = sortedKeys.map((k) => '$k=${params[k]}').join('|');
-
-    // Generate HMAC-SHA256
-    final key = utf8.encode(merchantKey);
-    final bytes = utf8.encode(paramString);
-    final hmacSha256 = Hmac(sha256, key);
-    final digest = hmacSha256.convert(bytes);
-
-    return base64.encode(digest.bytes);
+    // For MVP, transaction status comes via Supabase Realtime subscription
+    // This method is a placeholder for future direct status checks if needed
+    throw UnimplementedError(
+      'Transaction status should come via Supabase Realtime subscription',
+    );
   }
 
   void dispose() {
@@ -257,42 +105,110 @@ class PaytmService {
 // Response Models
 // ============================================
 
-class PaytmQrResponse {
+/// Response from create-order Edge Function
+class CreateOrderResponse {
   final bool success;
-  final String? qrCodeId;
-  final String? qrString;
-  final String? paytmOrderId;
-  final String? qrData;
-  final String? imageBase64;
-  final String? errorMessage;
-  final String? errorCode;
+  final OrderDetails order;
+  final QrData? qr;
+  final StationInfo station;
 
-  PaytmQrResponse({
+  CreateOrderResponse({
     required this.success,
-    this.qrCodeId,
-    this.qrString,
-    this.paytmOrderId,
-    this.qrData,
-    this.imageBase64,
-    this.errorMessage,
-    this.errorCode,
+    required this.order,
+    this.qr,
+    required this.station,
   });
 
-  factory PaytmQrResponse.fromJson(Map<String, dynamic> json) {
-    final body = json['body'] as Map<String, dynamic>?;
-    final resultInfo = body?['resultInfo'] as Map<String, dynamic>?;
-    final resultCode = resultInfo?['resultCode'] as String?;
-    final success = resultCode == '0000' || resultCode == 'SUCCESS';
+  factory CreateOrderResponse.fromJson(Map<String, dynamic> json) {
+    return CreateOrderResponse(
+      success: json['success'] as bool,
+      order: OrderDetails.fromJson(json['order'] as Map<String, dynamic>),
+      qr: json['qr'] != null ? QrData.fromJson(json['qr'] as Map<String, dynamic>) : null,
+      station: StationInfo.fromJson(json['station'] as Map<String, dynamic>),
+    );
+  }
+}
 
-    return PaytmQrResponse(
-      success: success,
-      qrCodeId: body?['qrCodeId'] as String?,
-      qrString: body?['qrData'] as String?,
-      paytmOrderId: body?['orderId'] as String?,
-      qrData: body?['qrData'] as String?,
-      imageBase64: body?['image'] as String?,
-      errorMessage: success ? null : resultInfo?['resultMsg'] as String?,
-      errorCode: success ? null : resultCode,
+class OrderDetails {
+  final String id;
+  final int? orderNumber;
+  final String paytmOrderId;
+  final int amountPaise;
+  final int creditsUsedPaise;
+  final int finalAmountPaise;
+  final DateTime expiresAt;
+  final String paymentStatus;
+  final String printStatus;
+
+  OrderDetails({
+    required this.id,
+    this.orderNumber,
+    required this.paytmOrderId,
+    required this.amountPaise,
+    required this.creditsUsedPaise,
+    required this.finalAmountPaise,
+    required this.expiresAt,
+    required this.paymentStatus,
+    required this.printStatus,
+  });
+
+  factory OrderDetails.fromJson(Map<String, dynamic> json) {
+    return OrderDetails(
+      id: json['id'] as String,
+      orderNumber: json['orderNumber'] as int?,
+      paytmOrderId: json['paytmOrderId'] as String,
+      amountPaise: json['amountPaise'] as int,
+      creditsUsedPaise: json['creditsUsedPaise'] as int,
+      finalAmountPaise: json['finalAmountPaise'] as int,
+      expiresAt: DateTime.parse(json['expiresAt'] as String),
+      paymentStatus: json['paymentStatus'] as String,
+      printStatus: json['printStatus'] as String,
+    );
+  }
+}
+
+class QrData {
+  final String? qrCodeId;
+  final String? qrData;
+  final String? qrImage; // Base64 encoded
+  final String? deepLink;
+  final bool isFree;
+
+  QrData({
+    this.qrCodeId,
+    this.qrData,
+    this.qrImage,
+    this.deepLink,
+    this.isFree = false,
+  });
+
+  factory QrData.fromJson(Map<String, dynamic> json) {
+    return QrData(
+      qrCodeId: json['qrCodeId'] as String?,
+      qrData: json['qrData'] as String?,
+      qrImage: json['qrImage'] as String?,
+      deepLink: json['deepLink'] as String?,
+      isFree: json['isFree'] as bool? ?? false,
+    );
+  }
+}
+
+class StationInfo {
+  final String id;
+  final String name;
+  final String? location;
+
+  StationInfo({
+    required this.id,
+    required this.name,
+    this.location,
+  });
+
+  factory StationInfo.fromJson(Map<String, dynamic> json) {
+    return StationInfo(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      location: json['location'] as String?,
     );
   }
 }

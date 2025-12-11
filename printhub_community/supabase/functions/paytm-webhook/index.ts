@@ -150,35 +150,73 @@ serve(async (req: Request) => {
 // Documents are NEVER stored on the server
 // Mobile app sends documents directly to Epson printer after payment confirmation
 
-// Verify Paytm webhook signature
+// Verify Paytm webhook signature using AES-128-CBC
+// Paytm checksums are encrypted with AES, not HMAC
 async function verifyPaytmSignature(payload: PaytmWebhookPayload): Promise<boolean> {
   try {
     const merchantKey = Deno.env.get('PAYTM_MERCHANT_KEY')
     if (!merchantKey) {
       console.warn('PAYTM_MERCHANT_KEY not set, skipping signature verification')
-      return true // For development
+      return true // For development only
     }
 
     const { CHECKSUMHASH, ...params } = payload
-    const sortedKeys = Object.keys(params).sort()
-    const paramString = sortedKeys.map(k => `${k}=${params[k as keyof typeof params]}`).join('|')
 
+    // Decode base64 checksum
+    const decoded = Uint8Array.from(atob(CHECKSUMHASH), c => c.charCodeAt(0))
+
+    // Extract IV (first 16 bytes) and encrypted data
+    const iv = decoded.slice(0, 16)
+    const encryptedData = decoded.slice(16)
+
+    // Prepare the key - Paytm expects 16-byte key
     const encoder = new TextEncoder()
-    const key = encoder.encode(merchantKey)
-    const data = encoder.encode(paramString)
+    let keyBytes = encoder.encode(merchantKey)
 
+    if (keyBytes.length > 16) {
+      keyBytes = keyBytes.slice(0, 16)
+    } else if (keyBytes.length < 16) {
+      const paddedKey = new Uint8Array(16)
+      paddedKey.set(keyBytes)
+      keyBytes = paddedKey
+    }
+
+    // Import key for decryption
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      key,
-      { name: 'HMAC', hash: 'SHA-256' },
+      keyBytes,
+      { name: 'AES-CBC' },
       false,
-      ['sign']
+      ['decrypt']
     )
 
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, data)
-    const expectedHash = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    // Decrypt
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-CBC', iv },
+      cryptoKey,
+      encryptedData
+    )
 
-    return CHECKSUMHASH === expectedHash
+    // Remove PKCS7 padding
+    const decryptedBytes = new Uint8Array(decrypted)
+    const padLen = decryptedBytes[decryptedBytes.length - 1]
+    const unpadded = decryptedBytes.slice(0, decryptedBytes.length - padLen)
+
+    // Decode to string
+    const decoder = new TextDecoder()
+    const decryptedString = decoder.decode(unpadded)
+
+    // Generate expected param string
+    const sortedKeys = Object.keys(params).sort()
+    const expectedString = sortedKeys.map(k => `${k}=${params[k as keyof typeof params]}`).join('|')
+
+    const isValid = decryptedString === expectedString
+    if (!isValid) {
+      console.log('Checksum mismatch - expected:', expectedString)
+      console.log('Checksum mismatch - got:', decryptedString)
+    }
+
+    return isValid
   } catch (error) {
     console.error('Signature verification error:', error)
     return false
@@ -305,21 +343,58 @@ async function initiateAutoRefund(
   }
 }
 
-// Generate Paytm checksum
-async function generatePaytmChecksum(params: any, merchantKey: string): Promise<string> {
-  const paramString = JSON.stringify(params)
-  const encoder = new TextEncoder()
-  const key = encoder.encode(merchantKey)
-  const data = encoder.encode(paramString)
+// Generate Paytm checksum using AES-128-CBC
+// Algorithm: Sort params -> pipe-separate -> encrypt with AES -> prepend IV -> base64
+async function generatePaytmChecksum(params: Record<string, any>, merchantKey: string): Promise<string> {
+  // Sort parameters alphabetically and create pipe-separated string
+  const sortedKeys = Object.keys(params).sort()
+  const paramString = sortedKeys.map(k => `${k}=${params[k]}`).join('|')
 
+  // Generate 16-byte random IV
+  const iv = crypto.getRandomValues(new Uint8Array(16))
+
+  // Prepare the key - Paytm expects 16-byte key
+  const encoder = new TextEncoder()
+  let keyBytes = encoder.encode(merchantKey)
+
+  if (keyBytes.length > 16) {
+    keyBytes = keyBytes.slice(0, 16)
+  } else if (keyBytes.length < 16) {
+    const paddedKey = new Uint8Array(16)
+    paddedKey.set(keyBytes)
+    keyBytes = paddedKey
+  }
+
+  // Import key for AES-CBC
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-256' },
+    keyBytes,
+    { name: 'AES-CBC' },
     false,
-    ['sign']
+    ['encrypt']
   )
 
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, data)
-  return btoa(String.fromCharCode(...new Uint8Array(signature)))
+  // Apply PKCS7 padding to data
+  const dataBytes = encoder.encode(paramString)
+  const padLength = 16 - (dataBytes.length % 16)
+  const paddedData = new Uint8Array(dataBytes.length + padLength)
+  paddedData.set(dataBytes)
+  for (let i = dataBytes.length; i < paddedData.length; i++) {
+    paddedData[i] = padLength
+  }
+
+  // Encrypt using AES-CBC
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv },
+    cryptoKey,
+    paddedData
+  )
+
+  // Combine: IV (16 bytes) + Encrypted data
+  const combined = new Uint8Array(iv.length + encrypted.byteLength)
+  combined.set(iv)
+  combined.set(new Uint8Array(encrypted), iv.length)
+
+  // Base64 encode
+  return btoa(String.fromCharCode(...combined))
 }

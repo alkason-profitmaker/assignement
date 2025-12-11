@@ -1,23 +1,20 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../logging/app_logger.dart';
-import '../models/order.dart';
-import 'paytm_service.dart';
 
-/// Service for handling payment callbacks and status polling
+/// Service for monitoring payment status via Supabase Realtime
+/// Payment confirmation comes from Paytm webhook -> Edge Function -> DB update
+/// This service listens for those DB updates and notifies the mobile app
 class PaymentCallbackService {
-  final PaytmService _paytmService;
   final SupabaseClient _supabase;
 
-  Timer? _pollingTimer;
   StreamController<PaymentStatusUpdate>? _statusController;
+  RealtimeChannel? _orderChannel;
   String? _currentOrderId;
 
   PaymentCallbackService({
-    required PaytmService paytmService,
     required SupabaseClient supabase,
-  })  : _paytmService = paytmService,
-        _supabase = supabase;
+  }) : _supabase = supabase;
 
   /// Stream of payment status updates
   Stream<PaymentStatusUpdate> get statusUpdates {
@@ -25,189 +22,94 @@ class PaymentCallbackService {
     return _statusController!.stream;
   }
 
-  /// Start monitoring payment for an order
+  /// Start monitoring payment for an order via Supabase Realtime
   void startPaymentMonitoring(String orderId) {
     AppLogger.info('Starting payment monitoring for order: $orderId', tag: 'Payment');
 
     _currentOrderId = orderId;
-    _stopPolling();
+    _stopMonitoring();
 
-    // Poll every 3 seconds for payment status
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _checkPaymentStatus(orderId);
-    });
+    // Subscribe to real-time updates from Supabase
+    // When webhook confirms payment, it updates the orders table
+    // This subscription catches that update and notifies the mobile app
+    _orderChannel = _supabase
+        .channel('order_$orderId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: orderId,
+          ),
+          callback: (payload) {
+            _handleOrderUpdate(payload.newRecord);
+          },
+        )
+        .subscribe();
 
-    // Also subscribe to real-time updates from Supabase
-    _subscribeToRealtimeUpdates(orderId);
+    // Also do initial check in case payment was already confirmed
+    _checkCurrentStatus(orderId);
   }
 
   /// Stop monitoring payment
   void stopPaymentMonitoring() {
     AppLogger.debug('Stopping payment monitoring', tag: 'Payment');
-    _stopPolling();
+    _stopMonitoring();
     _currentOrderId = null;
   }
 
-  void _stopPolling() {
-    _pollingTimer?.cancel();
-    _pollingTimer = null;
+  void _stopMonitoring() {
+    _orderChannel?.unsubscribe();
+    _orderChannel = null;
   }
 
-  /// Check payment status with Paytm API
-  Future<void> _checkPaymentStatus(String orderId) async {
-    try {
-      final status = await _paytmService.getTransactionStatus(orderId);
+  /// Handle order update from Realtime subscription
+  void _handleOrderUpdate(Map<String, dynamic> orderData) {
+    final orderId = orderData['id'] as String?;
+    if (orderId != _currentOrderId) return;
 
-      if (status.isPaid) {
-        AppLogger.info('Payment confirmed for order: $orderId', tag: 'Payment');
-        _stopPolling();
+    final paymentStatus = orderData['payment_status'] as String?;
+    final printStatus = orderData['print_status'] as String?;
 
-        // Update order in database
-        await _updateOrderPaymentStatus(
-          orderId: orderId,
-          txnId: status.txnId ?? '',
-          amount: status.amount ?? 0,
-          paymentMode: status.paymentMode ?? 'UPI',
-        );
+    if (paymentStatus?.toUpperCase() == 'PAID') {
+      AppLogger.info('Payment confirmed via Realtime for order: $orderId', tag: 'Payment');
 
-        _statusController?.add(PaymentStatusUpdate(
-          orderId: orderId,
-          status: PaymentCallbackStatus.success,
-          txnId: status.txnId,
-          message: 'Payment successful',
-        ));
-      } else if (status.isFailed) {
-        AppLogger.warning('Payment failed for order: $orderId', tag: 'Payment');
-        _stopPolling();
+      _statusController?.add(PaymentStatusUpdate(
+        orderId: orderId!,
+        status: PaymentCallbackStatus.success,
+        txnId: orderData['paytm_txn_id'] as String?,
+        message: 'Payment confirmed',
+      ));
+    } else if (printStatus?.toUpperCase() == 'FAILED') {
+      AppLogger.warning('Print failed for order: $orderId', tag: 'Payment');
 
-        _statusController?.add(PaymentStatusUpdate(
-          orderId: orderId,
-          status: PaymentCallbackStatus.failed,
-          message: status.resultMessage ?? 'Payment failed',
-          errorCode: status.resultCode,
-        ));
-      }
-      // If pending, continue polling
-    } catch (e) {
-      AppLogger.warning('Payment status check failed', error: e, tag: 'Payment');
-      // Don't stop polling on transient errors
+      _statusController?.add(PaymentStatusUpdate(
+        orderId: orderId!,
+        status: PaymentCallbackStatus.failed,
+        message: orderData['print_error_code'] as String? ?? 'Print failed',
+      ));
     }
   }
 
-  /// Subscribe to real-time updates from Supabase
-  void _subscribeToRealtimeUpdates(String orderId) {
-    _supabase
-        .from('orders')
-        .stream(primaryKey: ['id'])
-        .eq('id', orderId)
-        .listen((List<Map<String, dynamic>> data) {
-      if (data.isEmpty) return;
-
-      final orderData = data.first;
-      final paymentStatus = orderData['payment_status'] as String?;
-
-      if (paymentStatus?.toUpperCase() == 'PAID') {
-        _stopPolling();
-        _statusController?.add(PaymentStatusUpdate(
-          orderId: orderId,
-          status: PaymentCallbackStatus.success,
-          txnId: orderData['paytm_txn_id'] as String?,
-          message: 'Payment confirmed',
-        ));
-      }
-    });
-  }
-
-  /// Update order payment status in database
-  Future<void> _updateOrderPaymentStatus({
-    required String orderId,
-    required String txnId,
-  }) async {
+  /// Check current order status (for cases where payment was already confirmed)
+  Future<void> _checkCurrentStatus(String orderId) async {
     try {
-      await _supabase.from('orders').update({
-        'payment_status': 'PAID',
-        'paytm_txn_id': txnId,
-        'paid_at': DateTime.now().toIso8601String(),
-      }).eq('id', orderId);
+      final response = await _supabase
+          .from('orders')
+          .select('id, payment_status, paytm_txn_id, print_status, print_error_code')
+          .eq('id', orderId)
+          .single();
 
-      AppLogger.info('Order payment status updated: $orderId', tag: 'Payment');
+      _handleOrderUpdate(response);
     } catch (e) {
-      AppLogger.error('Failed to update order payment status', error: e, tag: 'Payment');
-      rethrow;
-    }
-  }
-
-  /// Process webhook callback from Paytm (called from server-side)
-  Future<WebhookProcessResult> processWebhook(Map<String, dynamic> payload) async {
-    try {
-      final webhookData = PaytmWebhookPayload.fromJson(payload);
-
-      // Verify signature
-      final isValid = _paytmService.verifyWebhookSignature(
-        payload,
-        webhookData.signature,
-      );
-
-      if (!isValid) {
-        AppLogger.warning('Invalid webhook signature', tag: 'Payment');
-        return WebhookProcessResult.invalidSignature();
-      }
-
-      // Process based on status
-      if (webhookData.isSuccess) {
-        await _updateOrderPaymentStatus(
-          orderId: webhookData.orderId,
-          txnId: webhookData.txnId,
-        );
-
-        // Notify listeners
-        _statusController?.add(PaymentStatusUpdate(
-          orderId: webhookData.orderId,
-          status: PaymentCallbackStatus.success,
-          txnId: webhookData.txnId,
-          message: 'Payment successful via webhook',
-        ));
-
-        return WebhookProcessResult.success(webhookData.orderId);
-      } else {
-        // Payment failed - order remains PENDING, will expire naturally
-        // No need to update DB - just notify listeners
-        _statusController?.add(PaymentStatusUpdate(
-          orderId: webhookData.orderId,
-          status: PaymentCallbackStatus.failed,
-          message: 'Payment failed',
-        ));
-
-        return WebhookProcessResult.paymentFailed(webhookData.orderId);
-      }
-    } catch (e) {
-      AppLogger.error('Webhook processing error', error: e, tag: 'Payment');
-      return WebhookProcessResult.error(e.toString());
-    }
-  }
-
-  /// Manually verify and sync payment status for an order
-  Future<bool> verifyAndSyncPayment(String orderId) async {
-    try {
-      final status = await _paytmService.getTransactionStatus(orderId);
-
-      if (status.isPaid) {
-        await _updateOrderPaymentStatus(
-          orderId: orderId,
-          txnId: status.txnId ?? '',
-        );
-        return true;
-      }
-
-      return false;
-    } catch (e) {
-      AppLogger.error('Payment verification failed', error: e, tag: 'Payment');
-      return false;
+      AppLogger.warning('Initial status check failed', error: e, tag: 'Payment');
     }
   }
 
   void dispose() {
-    _stopPolling();
+    _stopMonitoring();
     _statusController?.close();
     _statusController = null;
   }

@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrintHub Station Display</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .station-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .station-name {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .station-location {
+            font-size: 1rem;
+            opacity: 0.8;
+        }
+
+        .main-container {
+            background: white;
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Idle State */
+        .idle-state {
+            color: #333;
+        }
+
+        .idle-state .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+
+        .idle-state h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #1e3c72;
+        }
+
+        .idle-state p {
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        /* Order State */
+        .order-state {
+            display: none;
+            color: #333;
+        }
+
+        .order-state.active {
+            display: block;
+        }
+
+        .order-info {
+            margin-bottom: 30px;
+        }
+
+        .order-number {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .amount {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #1e3c72;
+        }
+
+        .amount-label {
+            font-size: 1rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .qr-container {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+
+        #qr-code {
+            margin: 0 auto;
+        }
+
+        #qr-code canvas {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .scan-instruction {
+            font-size: 1.2rem;
+            color: #333;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+
+        .upi-apps {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .upi-apps span {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .timer {
+            margin-top: 20px;
+            color: #f57c00;
+            font-size: 0.9rem;
+        }
+
+        /* Success State */
+        .success-state {
+            display: none;
+            color: #333;
+        }
+
+        .success-state.active {
+            display: block;
+        }
+
+        .success-icon {
+            width: 120px;
+            height: 120px;
+            background: #4caf50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+            animation: pulse 2s infinite;
+        }
+
+        .success-icon svg {
+            width: 60px;
+            height: 60px;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .success-state h2 {
+            font-size: 2rem;
+            color: #4caf50;
+            margin-bottom: 10px;
+        }
+
+        .success-state p {
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        .print-status {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e3f2fd;
+            border-radius: 12px;
+        }
+
+        .print-status h3 {
+            color: #1565c0;
+            margin-bottom: 10px;
+        }
+
+        /* Error State */
+        .error-banner {
+            display: none;
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .error-banner.active {
+            display: block;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 10px 20px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+
+        .status-dot.offline {
+            background: #f44336;
+        }
+
+        .status-text {
+            font-size: 0.9rem;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #1e3c72;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Setup Form */
+        .setup-form {
+            display: none;
+        }
+
+        .setup-form.active {
+            display: block;
+        }
+
+        .setup-form input, .setup-form select {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .setup-form button {
+            width: 100%;
+            padding: 15px;
+            background: #1e3c72;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .setup-form button:hover {
+            background: #2a5298;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="station-header">
+        <div class="station-name" id="station-name">PrintHub Station</div>
+        <div class="station-location" id="station-location">Loading...</div>
+    </div>
+
+    <div class="main-container">
+        <!-- Setup Form -->
+        <div class="setup-form" id="setup-form">
+            <h2 style="color: #1e3c72; margin-bottom: 20px;">Station Setup</h2>
+            <input type="text" id="supabase-url" placeholder="Supabase URL" />
+            <input type="text" id="supabase-key" placeholder="Supabase Anon Key" />
+            <select id="station-select">
+                <option value="">Select Station</option>
+            </select>
+            <button onclick="setupStation()">Connect Station</button>
+        </div>
+
+        <!-- Idle State -->
+        <div class="idle-state" id="idle-state">
+            <div class="icon">📱</div>
+            <h2>Ready to Print</h2>
+            <p>Create an order in the PrintHub app to see payment QR here</p>
+        </div>
+
+        <!-- Order State -->
+        <div class="order-state" id="order-state">
+            <div class="order-info">
+                <div class="order-number">Order #<span id="order-number">---</span></div>
+                <div class="amount">₹<span id="amount">0</span></div>
+                <div class="amount-label">Amount to Pay</div>
+            </div>
+
+            <div class="qr-container">
+                <div id="qr-code"></div>
+            </div>
+
+            <div class="scan-instruction">Scan with any UPI app to pay</div>
+            <div class="upi-apps">
+                <span>GPay</span>
+                <span>PhonePe</span>
+                <span>Paytm</span>
+            </div>
+
+            <div class="timer" id="timer">Expires in --:--</div>
+        </div>
+
+        <!-- Success State -->
+        <div class="success-state" id="success-state">
+            <div class="success-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h2>Payment Received!</h2>
+            <p>Thank you! Your print is being processed.</p>
+            <div class="print-status">
+                <h3>Print Status</h3>
+                <p id="print-status-text">Sending to printer...</p>
+            </div>
+        </div>
+
+        <div class="error-banner" id="error-banner"></div>
+    </div>
+
+    <div class="status-bar">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-text" id="status-text">Connecting...</span>
+    </div>
+
+    <script>
+        // Configuration
+        let supabase = null;
+        let currentStation = null;
+        let currentOrder = null;
+        let timerInterval = null;
+        let subscription = null;
+
+        // Check for saved configuration
+        const savedConfig = localStorage.getItem('stationConfig');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            initializeSupabase(config.url, config.key, config.stationId);
+        } else {
+            document.getElementById('setup-form').classList.add('active');
+        }
+
+        async function initializeSupabase(url, key, stationId) {
+            try {
+                supabase = window.supabase.createClient(url, key);
+
+                // Fetch station details
+                const { data: station, error } = await supabase
+                    .from('stations')
+                    .select('*, societies(*)')
+                    .eq('id', stationId)
+                    .single();
+
+                if (error) throw error;
+
+                currentStation = station;
+                document.getElementById('station-name').textContent = station.name;
+                document.getElementById('station-location').textContent = station.location_description || station.societies?.name || '';
+
+                // Hide setup form, show idle state
+                document.getElementById('setup-form').classList.remove('active');
+                document.getElementById('idle-state').style.display = 'block';
+
+                // Update status
+                updateStatus(true);
+
+                // Subscribe to orders for this station
+                subscribeToOrders();
+
+                // Check for existing pending orders
+                checkPendingOrders();
+
+            } catch (error) {
+                console.error('Setup error:', error);
+                showError('Failed to connect: ' + error.message);
+                updateStatus(false);
+            }
+        }
+
+        async function setupStation() {
+            const url = document.getElementById('supabase-url').value.trim();
+            const key = document.getElementById('supabase-key').value.trim();
+            const stationId = document.getElementById('station-select').value;
+
+            if (!url || !key) {
+                // Try to load stations with provided credentials
+                try {
+                    const tempClient = window.supabase.createClient(url, key);
+                    const { data: stations, error } = await tempClient
+                        .from('stations')
+                        .select('id, name, societies(name)')
+                        .eq('is_active', true);
+
+                    if (error) throw error;
+
+                    const select = document.getElementById('station-select');
+                    select.innerHTML = '<option value="">Select Station</option>';
+                    stations.forEach(s => {
+                        const option = document.createElement('option');
+                        option.value = s.id;
+                        option.textContent = `${s.name} (${s.societies?.name || 'Unknown'})`;
+                        select.appendChild(option);
+                    });
+
+                    showError('Please select a station');
+                    return;
+                } catch (error) {
+                    showError('Invalid credentials: ' + error.message);
+                    return;
+                }
+            }
+
+            if (!stationId) {
+                showError('Please select a station');
+                return;
+            }
+
+            // Save configuration
+            localStorage.setItem('stationConfig', JSON.stringify({
+                url,
+                key,
+                stationId
+            }));
+
+            initializeSupabase(url, key, stationId);
+        }
+
+        function subscribeToOrders() {
+            if (subscription) {
+                subscription.unsubscribe();
+            }
+
+            subscription = supabase
+                .channel('station-orders')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'orders',
+                        filter: `station_id=eq.${currentStation.id}`
+                    },
+                    (payload) => {
+                        console.log('Order update:', payload);
+                        handleOrderUpdate(payload);
+                    }
+                )
+                .subscribe((status) => {
+                    console.log('Subscription status:', status);
+                    updateStatus(status === 'SUBSCRIBED');
+                });
+        }
+
+        async function checkPendingOrders() {
+            try {
+                const { data: orders, error } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('station_id', currentStation.id)
+                    .eq('payment_status', 'PENDING')
+                    .gt('expires_at', new Date().toISOString())
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+
+                if (error) throw error;
+
+                if (orders && orders.length > 0) {
+                    showOrder(orders[0]);
+                }
+            } catch (error) {
+                console.error('Error checking pending orders:', error);
+            }
+        }
+
+        function handleOrderUpdate(payload) {
+            const order = payload.new;
+
+            if (payload.eventType === 'INSERT' && order.payment_status === 'PENDING') {
+                showOrder(order);
+            } else if (payload.eventType === 'UPDATE') {
+                if (order.payment_status === 'PAID') {
+                    showSuccess(order);
+                } else if (order.payment_status === 'PENDING' && currentOrder?.id !== order.id) {
+                    showOrder(order);
+                }
+
+                // Update print status if showing success
+                if (currentOrder?.id === order.id && order.print_status) {
+                    updatePrintStatus(order.print_status);
+                }
+            }
+        }
+
+        function showOrder(order) {
+            currentOrder = order;
+
+            // Update UI
+            document.getElementById('order-number').textContent = order.order_number || order.id.substring(0, 8);
+            document.getElementById('amount').textContent = (order.final_amount_paise / 100).toFixed(0);
+
+            // Generate QR code
+            generateQRCode(order);
+
+            // Start timer
+            startTimer(order.expires_at);
+
+            // Show order state
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('success-state').classList.remove('active');
+            document.getElementById('order-state').classList.add('active');
+        }
+
+        async function generateQRCode(order) {
+            const qrContainer = document.getElementById('qr-code');
+            qrContainer.innerHTML = '';
+
+            // Use QR data from Paytm (stored in order by create-order Edge Function)
+            let qrData = order.qr_data;
+
+            if (!qrData) {
+                // Fallback: Generate UPI deep link if Paytm QR not available
+                // This ensures the system works even if Paytm API fails
+                const society = currentStation.societies;
+                const amount = (order.final_amount_paise / 100).toFixed(2);
+                const txnNote = `PrintHub Order ${order.order_number || order.id.substring(0, 8)}`;
+
+                // Use society's Paytm VPA (Virtual Payment Address)
+                // Format: merchantid@paytm or custom VPA
+                const vpa = society?.paytm_mid ? `${society.paytm_mid}@paytm` : 'printhub@paytm';
+                qrData = `upi://pay?pa=${vpa}&pn=PrintHub&am=${amount}&tn=${encodeURIComponent(txnNote)}&tr=${order.paytm_order_id}`;
+
+                console.warn('Using fallback UPI deep link - Paytm QR data not available');
+            }
+
+            try {
+                await QRCode.toCanvas(qrContainer, qrData, {
+                    width: 280,
+                    margin: 2,
+                    color: {
+                        dark: '#1e3c72',
+                        light: '#ffffff'
+                    }
+                });
+            } catch (error) {
+                console.error('QR generation error:', error);
+                qrContainer.innerHTML = '<p style="color: red;">Failed to generate QR code</p>';
+            }
+        }
+
+        function startTimer(expiresAt) {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            const updateTimer = () => {
+                const now = new Date();
+                const expires = new Date(expiresAt);
+                const diff = expires - now;
+
+                if (diff <= 0) {
+                    document.getElementById('timer').textContent = 'Order expired';
+                    clearInterval(timerInterval);
+                    setTimeout(() => showIdle(), 3000);
+                    return;
+                }
+
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+                if (hours > 0) {
+                    document.getElementById('timer').textContent = `Expires in ${hours}h ${minutes}m`;
+                } else {
+                    document.getElementById('timer').textContent = `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
+            };
+
+            updateTimer();
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        function showSuccess(order) {
+            currentOrder = order;
+
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('order-state').classList.remove('active');
+            document.getElementById('success-state').classList.add('active');
+
+            updatePrintStatus(order.print_status);
+
+            // Return to idle after 10 seconds
+            setTimeout(() => {
+                showIdle();
+                checkPendingOrders(); // Check for next order
+            }, 10000);
+        }
+
+        function updatePrintStatus(status) {
+            const statusText = {
+                'AWAITING_DEVICE': 'Waiting for device to send...',
+                'QUEUED': 'In print queue...',
+                'PRINTING': 'Printing your document...',
+                'DONE': 'Print complete! Please collect.',
+                'FAILED': 'Print failed. Refund initiated.'
+            };
+
+            document.getElementById('print-status-text').textContent = statusText[status] || status;
+        }
+
+        function showIdle() {
+            currentOrder = null;
+
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+
+            document.getElementById('order-state').classList.remove('active');
+            document.getElementById('success-state').classList.remove('active');
+            document.getElementById('idle-state').style.display = 'block';
+        }
+
+        function showError(message) {
+            const errorBanner = document.getElementById('error-banner');
+            errorBanner.textContent = message;
+            errorBanner.classList.add('active');
+
+            setTimeout(() => {
+                errorBanner.classList.remove('active');
+            }, 5000);
+        }
+
+        function updateStatus(isConnected) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+
+            if (isConnected) {
+                dot.classList.remove('offline');
+                text.textContent = 'Connected';
+            } else {
+                dot.classList.add('offline');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        // Handle page visibility to reconnect
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && supabase && currentStation) {
+                checkPendingOrders();
+            }
+        });
+
+        // Clear station config (for debugging)
+        window.resetStation = () => {
+            localStorage.removeItem('stationConfig');
+            location.reload();
+        };
+    </script>
+</body>
+</html>
