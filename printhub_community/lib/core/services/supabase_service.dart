@@ -318,18 +318,20 @@ class SupabaseService {
   Future<PrintOrder> updateOrder({
     required String orderId,
     String? paytmOrderId,
+    String? paytmTxnId,
+    String? paymentStatus,
     String? refundStatus,
     String? refundReason,
     String? refundType,
-    String? status,
     String? printStatus,
   }) async {
     final updates = <String, dynamic>{};
     if (paytmOrderId != null) updates['paytm_order_id'] = paytmOrderId;
+    if (paytmTxnId != null) updates['paytm_txn_id'] = paytmTxnId;
+    if (paymentStatus != null) updates['payment_status'] = paymentStatus;
     if (refundStatus != null) updates['refund_status'] = refundStatus;
     if (refundReason != null) updates['refund_reason'] = refundReason;
     if (refundType != null) updates['refund_type'] = refundType;
-    if (status != null) updates['status'] = status;
     if (printStatus != null) updates['print_status'] = printStatus;
 
     final response = await _client
