@@ -80,6 +80,7 @@ class AppConstants {
 /// Print status enum with user-friendly labels
 enum PrintStatus {
   waiting('WAITING', 'Waiting for Payment'),
+  awaitingDevice('AWAITING_DEVICE', 'Payment Confirmed'),
   queued('QUEUED', 'In Print Queue'),
   printing('PRINTING', 'Printing...'),
   done('DONE', 'Completed'),
