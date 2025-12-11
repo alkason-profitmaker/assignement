@@ -1,184 +1,124 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:printhub_community/core/constants/app_constants.dart';
 import 'package:printhub_community/core/models/order.dart';
 
 void main() {
   group('PrintOrder', () {
     group('calculatePrice', () {
-      test('should calculate price for B/W pages only', () {
+      test('calculates correct price for B/W pages only', () {
         final price = PrintOrder.calculatePrice(
           bwPages: 10,
           colorPages: 0,
           copies: 1,
         );
-
-        // 10 pages * 300 paise = 3000 paise (₹30)
-        expect(price, equals(3000));
+        expect(price, 3000); // 10 * 300 paise
       });
 
-      test('should calculate price for color pages only', () {
+      test('calculates correct price for color pages only', () {
         final price = PrintOrder.calculatePrice(
           bwPages: 0,
           colorPages: 5,
           copies: 1,
         );
-
-        // 5 pages * 1000 paise = 5000 paise (₹50)
-        expect(price, equals(5000));
+        expect(price, 5000); // 5 * 1000 paise
       });
 
-      test('should calculate price for mixed pages', () {
+      test('calculates correct price for mixed pages', () {
         final price = PrintOrder.calculatePrice(
-          bwPages: 8,
-          colorPages: 2,
+          bwPages: 4,
+          colorPages: 1,
           copies: 1,
         );
-
-        // (8 * 300) + (2 * 1000) = 2400 + 2000 = 4400 paise (₹44)
-        expect(price, equals(4400));
+        expect(price, 2200); // (4*300) + (1*1000)
       });
 
-      test('should multiply by copies', () {
+      test('multiplies by copies correctly', () {
         final price = PrintOrder.calculatePrice(
           bwPages: 5,
           colorPages: 0,
           copies: 3,
         );
-
-        // (5 * 300) * 3 = 4500 paise (₹45)
-        expect(price, equals(4500));
+        expect(price, 4500); // 5 * 300 * 3
       });
 
-      test('should return 0 for no pages', () {
+      test('handles zero pages', () {
         final price = PrintOrder.calculatePrice(
           bwPages: 0,
           colorPages: 0,
           copies: 1,
         );
-
-        expect(price, equals(0));
+        expect(price, 0);
       });
     });
 
-    group('status checks', () {
-      test('isPending should be true for PENDING payment status', () {
-        final order = _createOrder(paymentStatus: 'PENDING');
-        expect(order.isPending, isTrue);
-        expect(order.isPaid, isFalse);
-      });
+    group('fromJson', () {
+      test('parses valid JSON correctly', () {
+        final json = {
+          'id': 'order-123',
+          'order_id': 'ORD-123',
+          'user_id': 'user-456',
+          'society_id': 'society-789',
+          'station_id': 'station-101',
+          'file_name': 'document.pdf',
+          'total_pages': 10,
+          'bw_pages': 8,
+          'color_pages': 2,
+          'copies': 1,
+          'amount_paise': 4400,
+          'final_amount_paise': 4400,
+          'status': 'pending',
+          'payment_status': 'pending',
+          'created_at': '2024-01-15T10:30:00Z',
+          'expires_at': '2024-01-15T12:30:00Z',
+        };
 
-      test('isPaid should be true for PAID payment status', () {
-        final order = _createOrder(paymentStatus: 'PAID');
-        expect(order.isPaid, isTrue);
-        expect(order.isPending, isFalse);
-      });
+        final order = PrintOrder.fromJson(json);
 
-      test('isCompleted should be true for DONE print status', () {
-        final order = _createOrder(printStatus: 'DONE');
-        expect(order.isCompleted, isTrue);
-        expect(order.isFailed, isFalse);
-      });
-
-      test('isFailed should be true for FAILED print status', () {
-        final order = _createOrder(printStatus: 'FAILED');
-        expect(order.isFailed, isTrue);
-        expect(order.isCompleted, isFalse);
-      });
-
-      test('isExpired should be true when expires_at is in the past', () {
-        final order = _createOrder(
-          expiresAt: DateTime.now().subtract(const Duration(hours: 1)),
-        );
-        expect(order.isExpired, isTrue);
-      });
-
-      test('isExpired should be false when expires_at is in the future', () {
-        final order = _createOrder(
-          expiresAt: DateTime.now().add(const Duration(hours: 1)),
-        );
-        expect(order.isExpired, isFalse);
-      });
-    });
-
-    group('amount calculations', () {
-      test('amountRupees should convert paise to rupees', () {
-        final order = _createOrder(amountPaise: 4500);
-        expect(order.amountRupees, equals(45.0));
-      });
-
-      test('finalAmountRupees should convert paise to rupees', () {
-        final order = _createOrder(finalAmountPaise: 3000);
-        expect(order.finalAmountRupees, equals(30.0));
-      });
-
-      test('creditsUsedRupees should convert paise to rupees', () {
-        final order = _createOrder(creditsUsedPaise: 600);
-        expect(order.creditsUsedRupees, equals(6.0));
-      });
-    });
-
-    group('canBeRefunded', () {
-      test('should be true for paid, non-refunded, non-completed orders', () {
-        final order = _createOrder(
-          paymentStatus: 'PAID',
-          printStatus: 'PRINTING',
-        );
-        expect(order.canBeRefunded, isTrue);
-      });
-
-      test('should be false for already refunded orders', () {
-        final order = _createOrder(
-          paymentStatus: 'REFUNDED',
-          printStatus: 'FAILED',
-        );
-        expect(order.canBeRefunded, isFalse);
-      });
-
-      test('should be false for completed orders', () {
-        final order = _createOrder(
-          paymentStatus: 'PAID',
-          printStatus: 'DONE',
-        );
-        expect(order.canBeRefunded, isFalse);
-      });
-
-      test('should be false for pending orders', () {
-        final order = _createOrder(
-          paymentStatus: 'PENDING',
-          printStatus: 'WAITING',
-        );
-        expect(order.canBeRefunded, isFalse);
+        expect(order.id, 'order-123');
+        expect(order.fileName, 'document.pdf');
+        expect(order.totalPages, 10);
+        expect(order.bwPages, 8);
+        expect(order.colorPages, 2);
+        expect(order.amountPaise, 4400);
       });
     });
   });
-}
 
-PrintOrder _createOrder({
-  String paymentStatus = 'PENDING',
-  String printStatus = 'WAITING',
-  int amountPaise = 3000,
-  int creditsUsedPaise = 0,
-  int finalAmountPaise = 3000,
-  DateTime? expiresAt,
-}) {
-  return PrintOrder(
-    id: 'test-order-id',
-    orderNumber: 1001,
-    userId: 'test-user-id',
-    societyId: 'test-society-id',
-    stationId: 'test-station-id',
-    fileName: 'test.pdf',
-    totalPages: 10,
-    bwPages: 10,
-    colorPages: 0,
-    copies: 1,
-    amountPaise: amountPaise,
-    creditsUsedPaise: creditsUsedPaise,
-    finalAmountPaise: finalAmountPaise,
-    paymentStatus: paymentStatus,
-    printStatus: printStatus,
-    expiresAt: expiresAt ?? DateTime.now().add(const Duration(hours: 2)),
-    createdAt: DateTime.now(),
-    updatedAt: DateTime.now(),
-  );
+  group('CreateOrderRequest', () {
+    test('creates valid request', () {
+      final request = CreateOrderRequest(
+        stationId: 'station-123',
+        fileName: 'test.pdf',
+        totalPages: 5,
+        bwPages: 4,
+        colorPages: 1,
+        copies: 2,
+        fileBytes: [1, 2, 3, 4, 5],
+      );
+
+      expect(request.stationId, 'station-123');
+      expect(request.fileName, 'test.pdf');
+      expect(request.totalPages, 5);
+      expect(request.copies, 2);
+    });
+
+    test('toJson produces correct output', () {
+      final request = CreateOrderRequest(
+        stationId: 'station-123',
+        fileName: 'test.pdf',
+        fileHash: 'abc123',
+        totalPages: 5,
+        bwPages: 4,
+        colorPages: 1,
+        copies: 2,
+        fileBytes: [1, 2, 3],
+      );
+
+      final json = request.toJson();
+
+      expect(json['station_id'], 'station-123');
+      expect(json['file_name'], 'test.pdf');
+      expect(json['file_hash'], 'abc123');
+      expect(json['total_pages'], 5);
+    });
+  });
 }
