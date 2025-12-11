@@ -18,8 +18,11 @@ class _PrintFlowScreenState extends ConsumerState<PrintFlowScreen> {
   @override
   void initState() {
     super.initState();
-    // Reset order state when entering
-    ref.read(orderProvider.notifier).resetOrder();
+    // Only reset if no document is already set (e.g., from collage)
+    final currentState = ref.read(orderProvider);
+    if (currentState.selectedDocument == null) {
+      ref.read(orderProvider.notifier).resetOrder();
+    }
     ref.read(orderProvider.notifier).loadCredits();
   }
 

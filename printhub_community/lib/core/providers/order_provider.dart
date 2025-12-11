@@ -183,6 +183,21 @@ class OrderNotifier extends StateNotifier<OrderState> {
     );
   }
 
+  /// Set document directly (for collage/external sources)
+  void setDocument(PrintDocument document) {
+    final society = _ref.read(currentSocietyProvider);
+    state = state.copyWith(
+      selectedDocument: document,
+      society: society,
+      currentStep: OrderStep.selectStation,
+    );
+  }
+
+  /// Set station directly
+  void setStation(Station station) {
+    state = state.copyWith(selectedStation: station);
+  }
+
   /// Load user credits and society pricing
   Future<void> loadCredits() async {
     final user = _ref.read(currentUserProvider);

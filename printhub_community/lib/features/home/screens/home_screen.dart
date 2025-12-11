@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/providers.dart';
 import '../../print/screens/print_flow_screen.dart';
+import '../../print/screens/collage_flow_screen.dart';
 import '../../orders/screens/order_history_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 
@@ -112,18 +113,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
 
-              // Print Now Card
+              // Print Options
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _PrintNowCard(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const PrintFlowScreen(),
-                        ),
-                      );
-                    },
+                  child: Column(
+                    children: [
+                      // Print Document Card
+                      _PrintOptionCard(
+                        title: 'PRINT DOCUMENT',
+                        subtitle: 'PDF, Images - Print instantly',
+                        icon: Icons.description_rounded,
+                        gradient: const [AppConstants.primaryColor, Color(0xFF1D4ED8)],
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const PrintFlowScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      // Photo Collage Card
+                      _PrintOptionCard(
+                        title: 'PHOTO COLLAGE',
+                        subtitle: '4, 9 or passport photos per page',
+                        icon: Icons.photo_library_rounded,
+                        gradient: const [Color(0xFF7C3AED), Color(0xFF5B21B6)],
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CollageFlowScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -206,27 +231,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _PrintNowCard extends StatelessWidget {
+class _PrintOptionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<Color> gradient;
   final VoidCallback onTap;
 
-  const _PrintNowCard({required this.onTap});
+  const _PrintOptionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.gradient,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppConstants.primaryColor, Color(0xFF1D4ED8)],
+          gradient: LinearGradient(
+            colors: gradient,
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppConstants.primaryColor.withOpacity(0.3),
+              color: gradient.first.withOpacity(0.3),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -238,19 +273,19 @@ class _PrintNowCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'PRINT NOW',
-                    style: TextStyle(
-                      fontSize: 24,
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
-                    'Select a document and print instantly',
+                    subtitle,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: Colors.white.withOpacity(0.9),
                     ),
                   ),
@@ -258,14 +293,14 @@ class _PrintNowCard extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.print_rounded,
-                size: 40,
+              child: Icon(
+                icon,
+                size: 32,
                 color: Colors.white,
               ),
             ),
